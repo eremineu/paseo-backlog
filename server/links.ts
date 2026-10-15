@@ -7,6 +7,14 @@ import { type AgentLink, agentLinkSchema } from "../shared/rpc";
 
 const linksFileSchema = z.record(z.string(), agentLinkSchema);
 
+const parseJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
 export const defaultLinksPath = () =>
   join(process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state"), "paseo-backlog", "links.json");
 
@@ -18,7 +26,8 @@ export const createLinkStore = (path = defaultLinksPath()) => {
     if (!existsSync(path)) {
       return {};
     }
-    const parsed = linksFileSchema.safeParse(JSON.parse(await readFile(path, "utf8")));
+    // A truncated or hand-broken file reads as empty, so the next save replaces it instead of failing forever.
+    const parsed = linksFileSchema.safeParse(parseJson(await readFile(path, "utf8")));
     return parsed.success ? parsed.data : {};
   };
 
