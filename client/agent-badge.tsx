@@ -1,13 +1,11 @@
-import { useAgent } from "@getpaseo/plugin/client";
-import { Pressable, Text, View } from "react-native";
 import type { PluginTheme } from "@getpaseo/plugin";
+import { Pressable, Text, View } from "react-native";
 import type { AgentLink } from "../shared/rpc";
 import type { Styles } from "./styles";
+import type { AgentState } from "./use-agent-states";
 
-type AgentState = { status: string; requiresAttention: boolean; attentionReason: string | null } | null;
-
-const describe = (agent: AgentState) => {
-  if (!agent || agent.status === "closed") {
+const describe = (agent: AgentState | null) => {
+  if (!agent || agent.archived || agent.status === "closed") {
     return { label: "Agent stopped", tone: "muted" as const };
   }
   if (agent.attentionReason === "permission") {
@@ -30,20 +28,17 @@ const describe = (agent: AgentState) => {
 
 export const AgentBadge = ({
   link,
+  agent,
   theme,
   styles,
   onOpen,
 }: {
   link: AgentLink;
+  agent: AgentState | null;
   theme: PluginTheme;
   styles: Styles;
   onOpen: ((agentId: string) => void) | null;
 }) => {
-  const agent = useAgent(link.agentId, ({ status, requiresAttention, attentionReason }) => ({
-    status,
-    requiresAttention,
-    attentionReason,
-  }));
   const { label, tone } = describe(agent);
   const colors = {
     muted: theme.colors.foregroundMuted,
@@ -58,11 +53,15 @@ export const AgentBadge = ({
     </View>
   );
 
-  if (!agent || !onOpen) {
+  if (!agent || agent.archived || !onOpen) {
     return badge;
   }
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}, open agent`} onPress={() => onOpen(link.agentId)}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, open agent`}
+      onPress={() => onOpen(link.agentId)}
+    >
       {badge}
     </Pressable>
   );

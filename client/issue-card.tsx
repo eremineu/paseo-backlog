@@ -3,6 +3,7 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
 import { Pressable, Text, View } from "react-native";
 import type { Card } from "../shared/issues";
 import type { AgentLink } from "../shared/rpc";
+import type { AgentState } from "./use-agent-states";
 import { AgentBadge } from "./agent-badge";
 import type { Styles } from "./styles";
 
@@ -18,6 +19,7 @@ export interface CardActions {
 export const IssueCard = ({
   card,
   link,
+  agent,
   busy,
   theme,
   styles,
@@ -25,6 +27,7 @@ export const IssueCard = ({
 }: {
   card: Card;
   link: AgentLink | undefined;
+  agent: AgentState | null;
   busy: boolean;
   theme: PluginTheme;
   styles: Styles;
@@ -63,7 +66,7 @@ export const IssueCard = ({
             <Icon name="ChevronDown" size={12} color={theme.colors.foregroundMuted} />
           </View>
         </Pressable>
-        {link ? <AgentBadge link={link} theme={theme} styles={styles} onOpen={actions.onOpenAgent} /> : null}
+        {link ? <AgentBadge link={link} agent={agent} theme={theme} styles={styles} onOpen={actions.onOpenAgent} /> : null}
       </View>
 
       <View style={styles.row}>

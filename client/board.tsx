@@ -14,6 +14,7 @@ import { startInMainCheckout, startInWorktree } from "./start-work";
 import { StatusMenu } from "./status-menu";
 import { useStyles } from "./styles";
 import { useDefaultAgentChoice } from "./use-agent-choice";
+import { useAgentStates } from "./use-agent-states";
 import { backlogKey, useBacklog } from "./use-backlog";
 
 const sections: readonly { key: keyof Board; title: string }[] = [
@@ -48,6 +49,7 @@ export const BacklogBoard = ({
   const writeStatus = useRpc(setStatus);
   const writeLink = useRpc(saveLink);
   const { effortNames, effort, setEffort, efforts, board, links } = useBacklog(projectRoot);
+  const agentStates = useAgentStates(Object.values(links).map((link) => link.agentId));
   const agents = useDefaultAgentChoice();
   const { catalog, choice: defaultChoice } = agents;
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -218,6 +220,7 @@ export const BacklogBoard = ({
                   key={card.file}
                   card={card}
                   link={links[card.file]}
+                  agent={agentStates.get(links[card.file]?.agentId ?? "") ?? null}
                   busy={busy.has(card.file)}
                   theme={theme}
                   styles={styles}
