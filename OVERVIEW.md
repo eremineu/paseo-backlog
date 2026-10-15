@@ -26,4 +26,4 @@ It reads and writes only issue files under the project's `.scratch/` folder, and
 
 - Paseo has no plugin API for opening a file in the Files tab, so issues open as plain text in a dialog.
 - The worktree's agent edits the issue file in the main checkout, because `.scratch/` is not part of git.
-- Requires Paseo 0.11.2 or later.
+- Requires Paseo 0.11.2 or later, on a macOS or Linux daemon. Windows paths are not handled.
