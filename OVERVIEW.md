@@ -1,26 +1,29 @@
-<!--
-OVERVIEW.md is required to list your plugin in the registry. Keep it beside
-paseo-plugin.json in your repository at the pinned commit and in your npm package.
-Replace this comment with useful facts before publishing.
+Backlog adds a workspace tab that shows a project's local markdown tracker as a board, and starts agents on its tasks.
 
-This overview is for people choosing a plugin in Paseo, on the plugin page under
-its install command. README assumes a GitHub audience and includes technical
-details, installation instructions, and badges. Long, AI-generated READMEs leave
-people reading past that material to understand what the plugin does.
+The tracker is the `.scratch/<effort>/issues/NN-*.md` layout: one file per issue, with `Status:`, `Assignee:`, `Labels:` and `Blocked by:` lines under the title. The board reads the main checkout of the workspace's project, so worktree workspaces show the same tracker.
 
-Write these parts in order, including only what helps someone decide to install:
+## What you can do
 
-1. Describe what your plugin is and does in plain terms first.
-2. Explain how it works only when it is not obvious.
-3. Explain setup when needed: settings, accounts, tokens, providers, tools, or
-   other plugins. Include applicable daemon version and operating system
-   requirements. Setup guidance is allowed; installation instructions are not.
-4. Explain capabilities and settings worth understanding, what each option does,
-   what the plugin reads or sends and where, permissions, and known limits.
+- Switch between efforts. The board opens on the one changed most recently.
+- See issues grouped into In flight, Ready to pick, Yours, Waiting, Later and Done. Blocked issues list what they wait on.
+- Change an issue's status from the card. Only the `Status:` line in the file is rewritten.
+- Pick an unblocked ready-for-agent issue. This creates a worktree on `feat/<scope>/<issue file>`, starts an agent there with an `/implement` prompt naming the issue's absolute path, and sets the status to in-progress. The scope is the first word of the effort name. The chevron next to Pick changes the branch type, scope, provider, model and mode for one pick.
+- Use Help me on ready-for-human, needs-triage and planning (`wayfinder:` labelled) issues. It starts an agent in the main checkout with a walkthrough or planning prompt.
+- Follow the agent from its card: running, waiting for permission, finished, failed or stopped. Tapping the badge opens the agent.
+- Tap a card's title to read the issue file and copy its path.
 
-Length follows complexity; a theme needs one paragraph. Choose headings only
-when they help. Use sentence case and plain factual language, with no em dashes.
-Omit installation commands, badges, changelog, contributing or license sections,
-marketing, and unsupported claims. Avoid implementation filler such as empty
-cleanup functions, theme-token field lists, or lists of absent features.
--->
+The board updates within a second of any file under `.scratch/` changing, whether you, an agent or another tool edited it.
+
+## Settings
+
+Settings → Plugins → Backlog agent picks the provider, model and mode used by Pick and Help me. "Provider default" follows whatever the provider marks as its default.
+
+## What it reads and writes
+
+It reads and writes only issue files under the project's `.scratch/` folder, and refuses paths outside it. Links between cards and agents are kept in `$XDG_STATE_HOME/paseo-backlog/links.json` (default `~/.local/state`), keyed by the issue's path. Nothing is sent off the machine.
+
+## Limits
+
+- Paseo has no plugin API for opening a file in the Files tab, so issues open as plain text in a dialog.
+- The worktree's agent edits the issue file in the main checkout, because `.scratch/` is not part of git.
+- Requires Paseo 0.11.2 or later.
