@@ -3,7 +3,8 @@ import { createLinkStore } from "./server/links";
 import * as tracker from "./server/tracker";
 import { listEfforts, listLinks, readBoard, readIssue, saveLink, setStatus, waitForChange } from "./shared/rpc";
 
-const contribute = (server: PluginServerContext) => {
+// Paseo reads the default export eagerly, before a `const` is initialised, so this must be a hoisted function.
+export default function contribute(server: PluginServerContext) {
   const feed = tracker.createChangeFeed();
   const links = createLinkStore();
 
@@ -23,6 +24,4 @@ const contribute = (server: PluginServerContext) => {
   });
 
   return () => feed.close();
-};
-
-export default contribute;
+}
