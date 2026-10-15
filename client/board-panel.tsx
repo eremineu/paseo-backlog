@@ -67,12 +67,13 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
     } catch (error) {
       toast.error(errorText(error));
     } finally {
+      // Refetch before re-enabling the card, or its stale Pick button invites a second worktree.
+      await refresh();
       setBusy((current) => {
         const next = new Set(current);
         next.delete(card.file);
         return next;
       });
-      await refresh();
     }
   };
 
@@ -94,7 +95,9 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
       return;
     }
     const branchName = overrides?.branchName ?? branchNameFor({ type: "feat", scope: scopeFromEffort(effort), file: card.file });
+    // The status is written before the agent starts, since the agent edits the same file and must not be overwritten.
     void withBusy(card, async () => {
+      await writeStatus({ projectRoot, effort, file: card.file, status: "in-progress" });
       const link = await startInWorktree({
         paseo,
         projectRoot,
@@ -103,8 +106,10 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
         prompt: pickPrompt(issuePathOf(card)),
         choice,
         issuePath: issuePathOf(card),
+      }).catch(async (error: unknown) => {
+        await writeStatus({ projectRoot, effort, file: card.file, status: "ready-for-agent" });
+        throw error;
       });
-      await writeStatus({ projectRoot, effort, file: card.file, status: "in-progress" });
       await writeLink({ projectRoot, effort, file: card.file, link });
       toast.show(`Started on ${branchName}`, { variant: "success" });
       openAgent?.(link.agentId);
