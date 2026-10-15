@@ -22,7 +22,8 @@ paseo plugin logs paseo-backlog
 | `shared/rpc.ts` | both | RPC contracts between the panel and the daemon |
 | `server/tracker.ts` | daemon | Reads and writes issue files, watches `.scratch/` for the long poll |
 | `server/links.ts` | daemon | Card-to-agent links in `~/.local/state/paseo-backlog/links.json` |
-| `client/board-panel.tsx` | app | The Backlog workspace panel |
+| `client/board.tsx` | app | The board itself: sections, cards, Pick and Help me |
+| `client/board-panel.tsx`, `client/board-screen.tsx` | app | The workspace tab, and the sidebar screen with a project picker |
 | `client/start-work.ts` | app | Creates the worktree or opens the main checkout, then starts the agent |
 
 Live updates are a long poll: `backlog.wait` resolves as soon as `.scratch/` changes, or after 20 s, under Paseo's 30 s RPC timeout.
