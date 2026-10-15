@@ -42,7 +42,8 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
   const writeLink = useRpc(saveLink);
   const projectRoot = useWorkspace(workspaceId, (workspace) => workspace.projectRootPath);
   const { effortNames, effort, setEffort, efforts, board, links } = useBacklog(projectRoot);
-  const { catalog, choice: defaultChoice } = useDefaultAgentChoice();
+  const agents = useDefaultAgentChoice();
+  const { catalog, choice: defaultChoice } = agents;
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [showDone, setShowDone] = useState(false);
@@ -59,6 +60,17 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
   const issuePathOf = (card: Card) => `${issuesDir}/${card.file}`;
   const refresh = () => queryClient.invalidateQueries({ queryKey: backlogKey(projectRoot) });
   const openAgent = navigation ? (agentId: string) => navigation.openAgent({ agentId }) : null;
+
+  // Says why no agent can start, so Pick and the options chevron never fail silently.
+  const agentProblem = () => {
+    if (agents.isLoading) {
+      return "Still loading the agent providers, try again in a moment.";
+    }
+    if (agents.error) {
+      return `Could not load agent providers: ${errorText(agents.error)}`;
+    }
+    return "No agent provider with models is available. Check Settings, then Providers.";
+  };
 
   const withBusy = async (card: Card, work: () => Promise<void>) => {
     setBusy((current) => new Set(current).add(card.file));
@@ -90,8 +102,11 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
   const pick = (card: Card, overrides: PickOverrides | null) => {
     setDialog(null);
     const choice = overrides?.choice ?? defaultChoice;
-    if (!effort || !issuesDir || !choice) {
-      toast.error("No agent provider is available.");
+    if (!effort || !issuesDir) {
+      return;
+    }
+    if (!choice) {
+      toast.error(agentProblem());
       return;
     }
     const branchName = overrides?.branchName ?? branchNameFor({ type: "feat", scope: scopeFromEffort(effort), file: card.file });
@@ -117,8 +132,11 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
   };
 
   const help = (card: Card) => {
-    if (!effort || !issuesDir || !defaultChoice) {
-      toast.error("No agent provider is available.");
+    if (!effort || !issuesDir) {
+      return;
+    }
+    if (!defaultChoice) {
+      toast.error(agentProblem());
       return;
     }
     void withBusy(card, async () => {
@@ -139,7 +157,13 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
     onStatus: (card) => setDialog({ kind: "status", card }),
     onView: (card) => setDialog({ kind: "view", card }),
     onPick: (card) => pick(card, null),
-    onPickWithOptions: (card) => setDialog({ kind: "options", card }),
+    onPickWithOptions: (card) => {
+      if (!defaultChoice) {
+        toast.error(agentProblem());
+        return;
+      }
+      setDialog({ kind: "options", card });
+    },
     onHelp: help,
     onOpenAgent: openAgent,
   };
