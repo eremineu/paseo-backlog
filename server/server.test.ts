@@ -89,6 +89,15 @@ describe("change feed", () => {
     feed.close();
   });
 
+  it("reports a tracker created after the first poll", async () => {
+    const feed = createChangeFeed();
+    const { version } = await feed.waitForChange(root, 0);
+    await writeIssue("freya", "01-a.md", "# A\n");
+
+    expect((await feed.waitForChange(root, version, 20)).version).toBeGreaterThan(version);
+    feed.close();
+  });
+
   it("returns the same version after a quiet stretch", async () => {
     await writeIssue("freya", "01-a.md", "# A\n");
     const feed = createChangeFeed();
@@ -103,6 +112,17 @@ describe("change feed", () => {
 });
 
 describe("link store", () => {
+  it("recovers from a broken links file on the next save", async () => {
+    const path = join(root, "links.json");
+    await writeFile(path, "{ not json");
+    const store = createLinkStore(path);
+    const issuesDir = join(root, ".scratch", "freya", "issues");
+
+    expect(await store.linksUnder(issuesDir)).toEqual({});
+    await store.save(join(issuesDir, "01-a.md"), { agentId: "a1", workspaceId: "w1" });
+    expect(await store.linksUnder(issuesDir)).toEqual({ "01-a.md": { agentId: "a1", workspaceId: "w1" } });
+  });
+
   it("keeps links per issue and returns them by file name", async () => {
     const store = createLinkStore(join(root, "state", "links.json"));
     const issuesDir = join(root, ".scratch", "freya", "issues");

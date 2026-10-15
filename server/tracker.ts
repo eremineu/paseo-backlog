@@ -1,6 +1,6 @@
 import { type FSWatcher, existsSync, watch } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { type Status, buildBoard, parseIssue, replaceStatus } from "../shared/issues";
 
 const quietPollMs = 20_000;
@@ -91,27 +91,32 @@ interface ScratchWatch {
 export const createChangeFeed = () => {
   const watches = new Map<string, ScratchWatch>();
 
-  const ensureWatch = (projectRoot: string) => {
-    assertProjectRoot(projectRoot);
-    let entry = watches.get(projectRoot);
-    if (!entry) {
-      entry = { version: 1, watcher: null, waiters: new Set() };
-      watches.set(projectRoot, entry);
+  const bump = (entry: ScratchWatch) => {
+    entry.version += 1;
+    for (const wake of entry.waiters) {
+      wake();
     }
+    entry.waiters.clear();
+  };
+
+  const ensureWatch = (rawRoot: string) => {
+    assertProjectRoot(rawRoot);
+    const projectRoot = resolve(rawRoot);
+    const known = watches.get(projectRoot);
+    const entry: ScratchWatch = known ?? { version: 1, watcher: null, waiters: new Set() };
+    watches.set(projectRoot, entry);
     const scratch = scratchDir(projectRoot);
     if (!entry.watcher && existsSync(scratch)) {
-      const current = entry;
-      current.watcher = watch(scratch, { recursive: true }, () => {
-        current.version += 1;
-        for (const wake of current.waiters) {
-          wake();
-        }
-        current.waiters.clear();
+      entry.watcher = watch(scratch, { recursive: true }, () => bump(entry));
+      entry.watcher.on("error", () => {
+        entry.watcher?.close();
+        entry.watcher = null;
+        bump(entry);
       });
-      current.watcher.on("error", () => {
-        current.watcher?.close();
-        current.watcher = null;
-      });
+      // A client has already seen this project unwatched (no tracker yet, or a dropped watch), so it may be stale.
+      if (known) {
+        bump(entry);
+      }
     }
     return entry;
   };
