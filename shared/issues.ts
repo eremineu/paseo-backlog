@@ -18,6 +18,7 @@ export type Status = z.infer<typeof statusSchema>;
 const doneStatuses: ReadonlySet<string> = new Set(["closed", "done", "wontfix"]);
 const laterStatuses: ReadonlySet<string> = new Set(["needs-triage", "needs-info"]);
 const inFlightStatuses: ReadonlySet<string> = new Set(["in-progress", "in-review"]);
+const knownStatuses: ReadonlySet<string> = new Set(statuses);
 
 export const issueSchema = z.object({
   id: z.string(),
@@ -50,7 +51,8 @@ export const boardSchema = z.object({
 export type Board = z.infer<typeof boardSchema>;
 
 // Reads `Name: value`, also in the bold `**Name:** value` form that ticket templates use.
-const headerPattern = (name: string) => new RegExp(`^(\\*{0,2}${name}:\\*{0,2})(.*)$`);
+// The value stops before a `\r`, so files with CRLF line endings parse and keep their endings on rewrite.
+const headerPattern = (name: string) => new RegExp(`^(\\*{0,2}${name}:\\*{0,2})([^\\r]*)`);
 
 const headerField = (lines: readonly string[], name: string) => {
   const pattern = headerPattern(name);
@@ -109,8 +111,7 @@ export const parseIssue = (file: string, text: string): Issue => {
   return {
     id: file.match(/^(\d+)/)?.[1] ?? file,
     file,
-    title: (lines.find((line) => line.startsWith("# ")) ?? `# ${file}`).slice(2).trim(),
-    status: headerField(lines, "Status").toLowerCase() || "needs-triage",
+    title: (lines.find((line) => line.startsWith("# ")) ?? `# ${file}`).slice(2).trim(),    status: headerField(lines, "Status").toLowerCase() || "needs-triage",
     assignee: headerField(lines, "Assignee"),
     labels,
     blockers: parseBlockers(headerField(lines, "Blocked by")),
@@ -155,7 +156,8 @@ export const buildBoard = (issues: readonly Issue[]): Board => {
     ready: cards.filter((card) => card.canPick),
     yours: cards.filter((card) => !isWaiting(card) && (card.status === "ready-for-human" || isOpenPlanning(card))),
     waiting: cards.filter((card) => isWaiting(card) && isActionable(card)),
-    later: cards.filter((card) => laterStatuses.has(card.status)),
+    // A status outside the known set (`blocked`, `done (2026-10-01)`) still shows, so it can be fixed from its card.
+    later: cards.filter((card) => laterStatuses.has(card.status) || !knownStatuses.has(card.status)),
     done: cards.filter((card) => isDone(card.status)),
   };
 };
@@ -174,17 +176,18 @@ export const replaceStatus = (text: string, status: Status) => {
   return lines.join("\n");
 };
 
-export const scopeFromEffort = (effort: string) => effort.split("-")[0];
-
-export const slugFromFile = (file: string) =>
-  file
-    .replace(/\.md$/, "")
+const slugify = (text: string) =>
+  text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+
+export const scopeFromEffort = (effort: string) => slugify(effort.split("-")[0]);
+
+export const slugFromFile = (file: string) => slugify(file.replace(/\.md$/, ""));
 
 export const branchTypes = ["feat", "fix", "chore", "refactor", "docs", "test", "perf", "ci"] as const;
 export type BranchType = (typeof branchTypes)[number];
 
 export const branchNameFor = ({ type, scope, file }: { type: string; scope: string; file: string }) =>
-  `${type}/${scope}/${slugFromFile(file)}`;
+  `${type}/${slugify(scope)}/${slugFromFile(file)}`;

@@ -32,8 +32,8 @@ export const PickOptions = ({
   const [scope, setScope] = useState(defaultScope);
   const [choice, setChoice] = useState(defaultChoice);
   const provider = catalog.find((entry) => entry.provider === choice.provider);
-  const trimmedScope = scope.trim();
-  const branchName = branchNameFor({ type, scope: trimmedScope, file });
+  const hasScope = /[a-z0-9]/i.test(scope);
+  const branchName = branchNameFor({ type, scope, file });
 
   const pickProvider = (next: string) => {
     const resolved = resolveAgentChoice(catalog, { provider: next, model: "", modeId: "" });
@@ -100,9 +100,9 @@ export const PickOptions = ({
 
         <Pressable
           accessibilityRole="button"
-          disabled={trimmedScope === ""}
+          disabled={!hasScope}
           onPress={() => onStart({ branchName, choice })}
-          style={[styles.primaryButton, { alignSelf: "flex-start", opacity: trimmedScope === "" ? 0.5 : 1 }]}
+          style={[styles.primaryButton, { alignSelf: "flex-start", opacity: hasScope ? 1 : 0.5 }]}
         >
           <Text style={styles.primaryButtonText}>Start in a new worktree</Text>
         </Pressable>

@@ -42,6 +42,12 @@ describe("parseIssue", () => {
     expect(parseIssue("01-a.md", issueText("Assignee: me")).status).toBe("needs-triage");
   });
 
+  it("reads files with CRLF line endings", () => {
+    const issue = parseIssue("01-a.md", "# A\r\n\r\nStatus: in-review\r\nBlocked by: 02\r\n");
+
+    expect(issue).toMatchObject({ title: "A", status: "in-review", blockers: ["2"] });
+  });
+
   it("marks wayfinder issues as planning", () => {
     expect(parseIssue("01-a.md", issueText("Labels: wayfinder:grilling")).isPlanning).toBe(true);
   });
@@ -82,6 +88,12 @@ describe("buildBoard", () => {
     expect(ids(board.done)).toEqual(["01"]);
   });
 
+  it("keeps an issue with an unknown status on the board", () => {
+    const unknown = buildBoard([parseIssue("09-odd.md", issueText("Status: blocked"))]);
+
+    expect(ids(unknown.later)).toEqual(["09"]);
+  });
+
   it("lists open blockers and leaves closed ones out", () => {
     expect(board.waiting[0].waitingFor).toEqual([{ id: "02", title: "Thor overview shows team data" }]);
     expect(board.ready[0].waitingFor).toEqual([]);
@@ -115,6 +127,10 @@ describe("replaceStatus", () => {
     expect(replaceStatus("# Title\n\nBody\n", "needs-info")).toBe("# Title\n\nStatus: needs-info\n\nBody\n");
   });
 
+  it("keeps CRLF line endings", () => {
+    expect(replaceStatus("# A\r\n\r\nStatus: done\r\n", "closed")).toBe("# A\r\n\r\nStatus: closed\r\n");
+  });
+
   it("leaves a Status line in the body alone", () => {
     const text = "# Title\n\nStatus: done\n\n## Notes\n\nStatus: something else\n";
 
@@ -138,5 +154,10 @@ describe("branch names", () => {
     expect(branchNameFor({ type: "feat", scope: "freya", file: "07-thor-overview.md" })).toBe(
       "feat/freya/07-thor-overview",
     );
+  });
+
+  it("turns a typed scope into a valid ref segment", () => {
+    expect(branchNameFor({ type: "fix", scope: " Raiden/UI ", file: "01-a.md" })).toBe("fix/raiden-ui/01-a");
+    expect(scopeFromEffort("Foo_Bar-x")).toBe("foo-bar");
   });
 });
