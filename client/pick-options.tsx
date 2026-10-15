@@ -1,15 +1,17 @@
-import { Modal, TextInput } from "@getpaseo/plugin/client/react-native";
+import { Modal } from "@getpaseo/plugin/client/react-native";
+import { SettingsCard, SettingsInput, SettingsRow, SettingsSection, SettingsSelect } from "@getpaseo/plugin/client/ui";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { type AgentChoice, type CatalogProvider, resolveAgentChoice } from "../shared/agent-choice";
 import { branchNameFor, branchTypes } from "../shared/issues";
-import { Chips } from "./chips";
 import type { Styles } from "./styles";
 
 export interface PickOverrides {
   branchName: string;
   choice: AgentChoice;
 }
+
+const providerDefaultMode = "";
 
 export const PickOptions = ({
   file,
@@ -42,6 +44,15 @@ export const PickOptions = ({
     }
   };
 
+  const modelOptions = (provider?.models ?? []).map((model) => ({
+    label: model.isDefault ? `${model.label} (default)` : model.label,
+    value: model.id,
+  }));
+  const modeOptions = [
+    { label: "Provider default", value: providerDefaultMode },
+    ...(provider?.modes ?? []).map((mode) => ({ label: mode.label, value: mode.id })),
+  ];
+
   return (
     <Modal
       title="Pick with options"
@@ -53,59 +64,67 @@ export const PickOptions = ({
       }}
     >
       <Modal.Content>
-        <View style={{ gap: 6 }}>
-          <Text style={styles.sectionTitle}>Branch</Text>
-          <Chips
-            options={branchTypes.map((value) => ({ value, label: value }))}
-            value={type}
-            styles={styles}
-            onChange={setType}
-          />
-          <TextInput
-            accessibilityLabel="Scope"
-            value={scope}
-            onChangeText={setScope}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-          />
-          <Text selectable style={styles.mono}>
-            {branchName}
-          </Text>
-        </View>
-
-        <View style={{ gap: 6 }}>
-          <Text style={styles.sectionTitle}>Agent</Text>
-          <Chips
-            options={catalog.map((entry) => ({ value: entry.provider, label: entry.label }))}
-            value={choice.provider}
-            styles={styles}
-            onChange={pickProvider}
-          />
-          <Chips
-            options={(provider?.models ?? []).map((model) => ({ value: model.id, label: model.label }))}
-            value={choice.model}
-            styles={styles}
-            onChange={(model) => setChoice({ ...choice, model })}
-          />
-          {(provider?.modes.length ?? 0) > 0 ? (
-            <Chips
-              options={(provider?.modes ?? []).map((mode) => ({ value: mode.id, label: mode.label }))}
-              value={choice.modeId}
-              styles={styles}
-              onChange={(modeId) => setChoice({ ...choice, modeId })}
+        <SettingsSection title="Worktree">
+          <SettingsCard>
+            <SettingsSelect
+              label="Type"
+              value={type}
+              options={branchTypes.map((value) => ({ label: value, value }))}
+              onValueChange={setType}
             />
-          ) : null}
-        </View>
+            <SettingsInput
+              label="Scope"
+              hint="The app the change lands in."
+              initialValue={defaultScope}
+              onChangeText={setScope}
+              error={hasScope ? null : "Scope needs at least one letter or digit."}
+            />
+            <SettingsRow label="Branch">
+              <Text selectable style={styles.mono}>
+                {branchName}
+              </Text>
+            </SettingsRow>
+          </SettingsCard>
+        </SettingsSection>
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={!hasScope}
-          onPress={() => onStart({ branchName, choice })}
-          style={[styles.primaryButton, { alignSelf: "flex-start", opacity: hasScope ? 1 : 0.5 }]}
-        >
-          <Text style={styles.primaryButtonText}>Start in a new worktree</Text>
-        </Pressable>
+        <SettingsSection title="Agent">
+          <SettingsCard>
+            <SettingsSelect
+              label="Provider"
+              value={choice.provider}
+              options={catalog.map((entry) => ({ label: entry.label, value: entry.provider }))}
+              onValueChange={pickProvider}
+            />
+            <SettingsSelect
+              label="Model"
+              value={choice.model}
+              options={modelOptions}
+              onValueChange={(model) => setChoice({ ...choice, model })}
+            />
+            {(provider?.modes.length ?? 0) > 0 ? (
+              <SettingsSelect
+                label="Mode"
+                value={choice.modeId ?? providerDefaultMode}
+                options={modeOptions}
+                onValueChange={(modeId) => setChoice({ ...choice, modeId: modeId === providerDefaultMode ? null : modeId })}
+              />
+            ) : null}
+          </SettingsCard>
+        </SettingsSection>
+
+        <View style={[styles.row, { justifyContent: "flex-end" }]}>
+          <Pressable accessibilityRole="button" onPress={onClose} style={styles.button}>
+            <Text style={styles.buttonText}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!hasScope}
+            onPress={() => onStart({ branchName, choice })}
+            style={[styles.primaryButton, { opacity: hasScope ? 1 : 0.5 }]}
+          >
+            <Text style={styles.primaryButtonText}>Start in a new worktree</Text>
+          </Pressable>
+        </View>
       </Modal.Content>
     </Modal>
   );
