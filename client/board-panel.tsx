@@ -25,11 +25,7 @@ const sections: readonly { key: keyof Board; title: string }[] = [
   { key: "done", title: "Done" },
 ];
 
-type Dialog =
-  | { kind: "status"; card: Card }
-  | { kind: "view"; card: Card }
-  | { kind: "options"; card: Card }
-  | null;
+type Dialog = { kind: "status"; card: Card } | { kind: "view"; card: Card } | { kind: "options"; card: Card } | null;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -40,7 +36,9 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
   const queryClient = useQueryClient();
   const writeStatus = useRpc(setStatus);
   const writeLink = useRpc(saveLink);
-  const projectRoot = useWorkspace(workspaceId, (workspace) => workspace.projectRootPath);
+  const project = useWorkspace(workspaceId, ({ projectRootPath, projectKind }) => ({ projectRootPath, projectKind }));
+  const projectRoot = project?.projectRootPath ?? null;
+  const isGit = project?.projectKind === "git";
   const { effortNames, effort, setEffort, efforts, board, links } = useBacklog(projectRoot);
   const agents = useDefaultAgentChoice();
   const { catalog, choice: defaultChoice } = agents;
@@ -109,24 +107,37 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
       toast.error(agentProblem());
       return;
     }
-    const branchName = overrides?.branchName ?? branchNameFor({ type: "feat", scope: scopeFromEffort(effort), file: card.file });
+    const branchName =
+      overrides?.branchName ?? branchNameFor({ type: "feat", scope: scopeFromEffort(effort), file: card.file });
     // The status is written before the agent starts, since the agent edits the same file and must not be overwritten.
+    // A folder without git has no worktrees, so the agent works in the project itself.
+    const start = () =>
+      isGit
+        ? startInWorktree({
+            paseo,
+            projectRoot,
+            card,
+            branchName,
+            prompt: pickPrompt(issuePathOf(card), true),
+            choice,
+            issuePath: issuePathOf(card),
+          })
+        : startInMainCheckout({
+            paseo,
+            projectRoot,
+            card,
+            prompt: pickPrompt(issuePathOf(card), false),
+            choice,
+            issuePath: issuePathOf(card),
+          });
     void withBusy(card, async () => {
       await writeStatus({ projectRoot, effort, file: card.file, status: "in-progress" });
-      const link = await startInWorktree({
-        paseo,
-        projectRoot,
-        card,
-        branchName,
-        prompt: pickPrompt(issuePathOf(card)),
-        choice,
-        issuePath: issuePathOf(card),
-      }).catch(async (error: unknown) => {
+      const link = await start().catch(async (error: unknown) => {
         await writeStatus({ projectRoot, effort, file: card.file, status: "ready-for-agent" });
         throw error;
       });
       await writeLink({ projectRoot, effort, file: card.file, link });
-      toast.show(`Started on ${branchName}`, { variant: "success" });
+      toast.show(isGit ? `Started on ${branchName}` : "Started in the project folder", { variant: "success" });
       openAgent?.(link.agentId);
     });
   };
@@ -174,9 +185,7 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
     }
     if (effortNames.length === 0) {
       return (
-        <Text style={styles.muted}>
-          No tracker in {projectRoot}. Efforts live in .scratch/&lt;effort&gt;/issues/.
-        </Text>
+        <Text style={styles.muted}>No tracker in {projectRoot}. Efforts live in .scratch/&lt;effort&gt;/issues/.</Text>
       );
     }
     if (board.error) {
@@ -227,7 +236,10 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
           <Text style={styles.title}>Backlog</Text>
           {effortNames.length > 1 ? (
             <Chips
-              options={effortNames.map((name) => ({ value: name, label: name }))}
+              options={effortNames.map((name) => ({
+                value: name,
+                label: name,
+              }))}
               value={effort}
               styles={styles}
               onChange={setEffort}
@@ -259,6 +271,7 @@ export const BoardPanel = ({ theme, layout, workspaceId, navigation }: PluginWor
       {dialog?.kind === "options" && effort && defaultChoice ? (
         <PickOptions
           file={dialog.card.file}
+          isGit={isGit}
           defaultScope={scopeFromEffort(effort)}
           defaultChoice={defaultChoice}
           catalog={catalog}

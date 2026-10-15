@@ -5,7 +5,11 @@ const path = "/repo/.scratch/freya/issues/04-a.md";
 
 describe("pickPrompt", () => {
   it("hands the absolute issue path to /implement", () => {
-    expect(pickPrompt(path)).toMatch(/^\/implement \/repo\/\.scratch\/freya\/issues\/04-a\.md /);
+    expect(pickPrompt(path, true)).toMatch(/^\/implement \/repo\/\.scratch\/freya\/issues\/04-a\.md /);
+  });
+
+  it("asks for no commit when the project is not a git repo", () => {
+    expect(pickPrompt(path, false)).not.toMatch(/commit/);
   });
 });
 

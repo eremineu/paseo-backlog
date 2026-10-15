@@ -1,8 +1,10 @@
 import type { Card } from "./issues";
 
 // Worktrees don't carry the gitignored `.scratch/`, so every prompt names the main checkout's file.
-export const pickPrompt = (issuePath: string) =>
-  `/implement ${issuePath} — the issue file lives in the main checkout, so edit it at that exact path. When it's built, tested and committed, set the issue's Status to closed and add a short note under "## Comments" on what was built.`;
+export const pickPrompt = (issuePath: string, isGit: boolean) =>
+  isGit
+    ? `/implement ${issuePath} — the issue file lives in the main checkout, so edit it at that exact path. When it's built, tested and committed, set the issue's Status to closed and add a short note under "## Comments" on what was built.`
+    : `/implement ${issuePath} — when it's built and tested, set the issue's Status to closed and add a short note under "## Comments" on what was built.`;
 
 export const helpPrompt = (card: Pick<Card, "status" | "isPlanning">, issuePath: string, mapPath: string | null) => {
   if (card.isPlanning) {

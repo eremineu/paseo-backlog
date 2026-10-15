@@ -15,6 +15,7 @@ const providerDefaultMode = "";
 
 export const PickOptions = ({
   file,
+  isGit,
   defaultScope,
   defaultChoice,
   catalog,
@@ -23,6 +24,7 @@ export const PickOptions = ({
   onClose,
 }: {
   file: string;
+  isGit: boolean;
   defaultScope: string;
   defaultChoice: AgentChoice;
   catalog: readonly CatalogProvider[];
@@ -34,7 +36,7 @@ export const PickOptions = ({
   const [scope, setScope] = useState(defaultScope);
   const [choice, setChoice] = useState(defaultChoice);
   const provider = catalog.find((entry) => entry.provider === choice.provider);
-  const hasScope = /[a-z0-9]/i.test(scope);
+  const hasScope = !isGit || /[a-z0-9]/i.test(scope);
   const branchName = branchNameFor({ type, scope, file });
 
   const pickProvider = (next: string) => {
@@ -64,28 +66,30 @@ export const PickOptions = ({
       }}
     >
       <Modal.Content>
-        <SettingsSection title="Worktree">
-          <SettingsCard>
-            <SettingsSelect
-              label="Type"
-              value={type}
-              options={branchTypes.map((value) => ({ label: value, value }))}
-              onValueChange={setType}
-            />
-            <SettingsInput
-              label="Scope"
-              hint="The app the change lands in."
-              initialValue={defaultScope}
-              onChangeText={setScope}
-              error={hasScope ? null : "Scope needs at least one letter or digit."}
-            />
-            <SettingsRow label="Branch">
-              <Text selectable style={styles.mono}>
-                {branchName}
-              </Text>
-            </SettingsRow>
-          </SettingsCard>
-        </SettingsSection>
+        {isGit ? (
+          <SettingsSection title="Worktree">
+            <SettingsCard>
+              <SettingsSelect
+                label="Type"
+                value={type}
+                options={branchTypes.map((value) => ({ label: value, value }))}
+                onValueChange={setType}
+              />
+              <SettingsInput
+                label="Scope"
+                hint="The app the change lands in."
+                initialValue={defaultScope}
+                onChangeText={setScope}
+                error={hasScope ? null : "Scope needs at least one letter or digit."}
+              />
+              <SettingsRow label="Branch">
+                <Text selectable style={styles.mono}>
+                  {branchName}
+                </Text>
+              </SettingsRow>
+            </SettingsCard>
+          </SettingsSection>
+        ) : null}
 
         <SettingsSection title="Agent">
           <SettingsCard>
@@ -122,7 +126,7 @@ export const PickOptions = ({
             onPress={() => onStart({ branchName, choice })}
             style={[styles.primaryButton, { opacity: hasScope ? 1 : 0.5 }]}
           >
-            <Text style={styles.primaryButtonText}>Start in a new worktree</Text>
+            <Text style={styles.primaryButtonText}>{isGit ? "Start in a new worktree" : "Start in the project folder"}</Text>
           </Pressable>
         </View>
       </Modal.Content>
