@@ -40,7 +40,7 @@ Both take the same shape:
         "branch": "{type}/{effortPrefix}/{slug}",
         "setStatus": "doing",
         "agent": { "provider": "claude", "model": "claude-opus-5-5" },
-        "prompt": "/ship {issue}"
+        "prompt": "/my-skill {issue}"
       },
       { "id": "plan", "hidden": true }
     ]

@@ -10,23 +10,23 @@ import {
   slugFromFile,
 } from "./issues";
 
-const issueText = (header: string, title = "Thor overview shows team data") =>
+const issueText = (header: string, title = "Settings page shows the wrong totals") =>
   `# ${title}\n\n${header}\n\n## Problem\n\nThe tab shows team ratios.\n\n## Evidence\n\n- one\n`;
 
 describe("parseIssue", () => {
   it("reads the header lines and the first paragraph", () => {
     const issue = parseIssue(
-      "07-thor-overview.md",
-      issueText("Status: Ready-for-agent\nAssignee: unclaimed\nLabels: ui, freya\nBlocked by: 01, 02"),
+      "07-settings-totals.md",
+      issueText("Status: Ready-for-agent\nAssignee: unclaimed\nLabels: ui, web\nBlocked by: 01, 02"),
     );
 
     expect(issue).toMatchObject({
       id: "07",
-      file: "07-thor-overview.md",
-      title: "Thor overview shows team data",
+      file: "07-settings-totals.md",
+      title: "Settings page shows the wrong totals",
       status: "ready-for-agent",
       assignee: "unclaimed",
-      labels: ["ui", "freya"],
+      labels: ["ui", "web"],
       blockers: ["1", "2"],
       summary: "The tab shows team ratios.",
     });
@@ -58,7 +58,7 @@ describe("parseBlockers", () => {
     ["none", []],
     ["none (02-reptile-api closed)", []],
     ["06-plug-into-company-wide-mcp", ["6"]],
-    ["09 How the modules differ (closed), 17 Freya login audit (closed)", ["9", "17"]],
+    ["09 How the modules differ (closed), 17 Login audit (closed)", ["9", "17"]],
     ["#01; [03: Title](03-title.md)", ["1", "3"]],
     ["see [the spike](./04-spike.md)", ["4"]],
   ])("%s", (text, expected) => {
@@ -95,7 +95,7 @@ describe("buildBoard", () => {
   });
 
   it("lists open blockers and leaves closed ones out", () => {
-    expect(board.waiting[0].waitingFor).toEqual([{ id: "02", title: "Thor overview shows team data" }]);
+    expect(board.waiting[0].waitingFor).toEqual([{ id: "02", title: "Settings page shows the wrong totals" }]);
     expect(board.ready[0].waitingFor).toEqual([]);
   });
 
@@ -162,25 +162,25 @@ describe("replaceStatus", () => {
 
 describe("branch names", () => {
   it("takes the scope from the effort name prefix", () => {
-    expect(scopeFromEffort("freya-backlog")).toBe("freya");
+    expect(scopeFromEffort("web-backlog")).toBe("web");
     expect(scopeFromEffort("player-scraper")).toBe("player");
-    expect(scopeFromEffort("raiden")).toBe("raiden");
+    expect(scopeFromEffort("api")).toBe("api");
   });
 
   it("slugs the issue file", () => {
-    expect(slugFromFile("07-thor-overview.md")).toBe("07-thor-overview");
+    expect(slugFromFile("07-settings-totals.md")).toBe("07-settings-totals");
     expect(slugFromFile("08 Weird Name!.md")).toBe("08-weird-name");
   });
 
   it("joins type, scope and slug", () => {
-    expect(branchNameFor({ template: "{type}/{effortPrefix}/{slug}", type: "feat", scope: "freya", effort: "freya-backlog", file: "07-thor-overview.md" })).toBe(
-      "feat/freya/07-thor-overview",
+    expect(branchNameFor({ template: "{type}/{effortPrefix}/{slug}", type: "feat", scope: "web", effort: "web-backlog", file: "07-settings-totals.md" })).toBe(
+      "feat/web/07-settings-totals",
     );
   });
 
   it("turns a typed scope into a valid ref segment", () => {
-    expect(branchNameFor({ template: "{type}/{effortPrefix}/{slug}", type: "fix", scope: " Raiden/UI ", effort: "x", file: "01-a.md" })).toBe("fix/raiden-ui/01-a");
-    expect(branchNameFor({ template: "work/{effort}-{id}", type: "feat", scope: "x", effort: "Freya Backlog", file: "07-a.md" })).toBe("work/freya-backlog-07");
+    expect(branchNameFor({ template: "{type}/{effortPrefix}/{slug}", type: "fix", scope: " Api/UI ", effort: "x", file: "01-a.md" })).toBe("fix/api-ui/01-a");
+    expect(branchNameFor({ template: "work/{effort}-{id}", type: "feat", scope: "x", effort: "Web Backlog", file: "07-a.md" })).toBe("work/web-backlog-07");
     expect(scopeFromEffort("Foo_Bar-x")).toBe("foo-bar");
   });
 });

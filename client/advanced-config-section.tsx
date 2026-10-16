@@ -12,7 +12,7 @@ import { useStyles } from "./styles";
 const starter = JSON.stringify(
   {
     version: 1,
-    actions: [{ ...builtInConfig.actions[0], prompt: "/implement {issue}" }],
+    actions: [{ ...builtInConfig.actions[0], prompt: "/my-skill {issue}" }],
   },
   null,
   2,

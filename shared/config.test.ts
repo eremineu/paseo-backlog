@@ -123,8 +123,8 @@ describe("sectionOf", () => {
 
 describe("renderTemplate", () => {
   it("fills known placeholders and leaves unknown ones visible", () => {
-    expect(renderTemplate("/ship {issue} on {branch} {oops}", { issue: "/a.md", branch: "feat/x" })).toBe(
-      "/ship /a.md on feat/x {oops}",
+    expect(renderTemplate("/my-skill {issue} on {branch} {oops}", { issue: "/a.md", branch: "feat/x" })).toBe(
+      "/my-skill /a.md on feat/x {oops}",
     );
   });
 });

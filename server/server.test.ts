@@ -38,36 +38,36 @@ describe("tracker", () => {
   });
 
   it("reads the board and the map", async () => {
-    await writeIssue("freya", "01-a.md", "# A\n\nStatus: ready-for-agent\n");
-    await writeFile(join(root, ".scratch", "freya", "map.md"), "# Map\n");
+    await writeIssue("web", "01-a.md", "# A\n\nStatus: ready-for-agent\n");
+    await writeFile(join(root, ".scratch", "web", "map.md"), "# Map\n");
 
-    const result = await readBoard(root, "freya", builtInConfig);
+    const result = await readBoard(root, "web", builtInConfig);
 
     expect(result.board.ready.map((card) => card.id)).toEqual(["01"]);
-    expect(result.mapPath).toBe(join(root, ".scratch", "freya", "map.md"));
-    expect(result.issuesDir).toBe(join(root, ".scratch", "freya", "issues"));
+    expect(result.mapPath).toBe(join(root, ".scratch", "web", "map.md"));
+    expect(result.issuesDir).toBe(join(root, ".scratch", "web", "issues"));
   });
 
   it("writes a new status into the issue file", async () => {
-    await writeIssue("freya", "01-a.md", "# A\n\nStatus: ready-for-agent\nAssignee: me\n");
+    await writeIssue("web", "01-a.md", "# A\n\nStatus: ready-for-agent\nAssignee: me\n");
 
-    await setStatus(root, builtInConfig, "freya", "01-a.md", "in-progress");
+    await setStatus(root, builtInConfig, "web", "01-a.md", "in-progress");
 
-    expect((await readIssue(root, ".scratch", "freya", "01-a.md")).text).toBe("# A\n\nStatus: in-progress\nAssignee: me\n");
+    expect((await readIssue(root, ".scratch", "web", "01-a.md")).text).toBe("# A\n\nStatus: in-progress\nAssignee: me\n");
   });
 
   it.each([
     ["..", "01-a.md"],
-    ["freya", "../../secret.md"],
-    ["freya", "notes.txt"],
+    ["web", "../../secret.md"],
+    ["web", "notes.txt"],
   ])("refuses paths outside the tracker (%s, %s)", async (effort, file) => {
     await expect(setStatus(root, builtInConfig, effort, file, "done")).rejects.toThrow();
   });
 
   it("refuses a status the config doesn't know", async () => {
-    await writeIssue("freya", "01-a.md", "# A\n\nStatus: ready-for-agent\n");
+    await writeIssue("web", "01-a.md", "# A\n\nStatus: ready-for-agent\n");
 
-    await expect(setStatus(root, builtInConfig, "freya", "01-a.md", "nonsense")).rejects.toThrow(/Unknown status/);
+    await expect(setStatus(root, builtInConfig, "web", "01-a.md", "nonsense")).rejects.toThrow(/Unknown status/);
   });
 
   it("refuses a relative project root", async () => {
@@ -77,7 +77,7 @@ describe("tracker", () => {
 
 describe("change feed", () => {
   it("answers at once when the client is behind", async () => {
-    await writeIssue("freya", "01-a.md", "# A\n");
+    await writeIssue("web", "01-a.md", "# A\n");
     const feed = createChangeFeed();
 
     expect(await feed.waitForChange(root, ".scratch", 0)).toEqual({ version: 1 });
@@ -85,13 +85,13 @@ describe("change feed", () => {
   });
 
   it("wakes a waiting client when an issue changes", async () => {
-    await writeIssue("freya", "01-a.md", "# A\n");
+    await writeIssue("web", "01-a.md", "# A\n");
     const feed = createChangeFeed();
     await feed.waitForChange(root, ".scratch", 0);
 
     const waiting = feed.waitForChange(root, ".scratch", 1, 5_000);
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    await writeIssue("freya", "01-a.md", "# A\n\nStatus: done\n");
+    await writeIssue("web", "01-a.md", "# A\n\nStatus: done\n");
 
     expect((await waiting).version).toBeGreaterThan(1);
     feed.close();
@@ -100,14 +100,14 @@ describe("change feed", () => {
   it("reports a tracker created after the first poll", async () => {
     const feed = createChangeFeed();
     const { version } = await feed.waitForChange(root, ".scratch", 0);
-    await writeIssue("freya", "01-a.md", "# A\n");
+    await writeIssue("web", "01-a.md", "# A\n");
 
     expect((await feed.waitForChange(root, ".scratch", version, 20)).version).toBeGreaterThan(version);
     feed.close();
   });
 
   it("wakes a waiting client when paseo.json changes", async () => {
-    await writeIssue("freya", "01-a.md", "# A\n");
+    await writeIssue("web", "01-a.md", "# A\n");
     const feed = createChangeFeed();
     await feed.waitForChange(root, ".scratch", 0);
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
@@ -121,7 +121,7 @@ describe("change feed", () => {
   });
 
   it("returns the same version after a quiet stretch", async () => {
-    await writeIssue("freya", "01-a.md", "# A\n");
+    await writeIssue("web", "01-a.md", "# A\n");
     const feed = createChangeFeed();
     await feed.waitForChange(root, ".scratch", 0);
     // macOS can still report the write made just before the watch started.
@@ -176,7 +176,7 @@ describe("link store", () => {
     const path = join(root, "links.json");
     await writeFile(path, "{ not json");
     const store = createLinkStore(path);
-    const issuesDir = join(root, ".scratch", "freya", "issues");
+    const issuesDir = join(root, ".scratch", "web", "issues");
 
     expect(await store.linksUnder(issuesDir)).toEqual({});
     await store.save(join(issuesDir, "01-a.md"), { agentId: "a1", workspaceId: "w1" });
@@ -185,7 +185,7 @@ describe("link store", () => {
 
   it("keeps links per issue and returns them by file name", async () => {
     const store = createLinkStore(join(root, "state", "links.json"));
-    const issuesDir = join(root, ".scratch", "freya", "issues");
+    const issuesDir = join(root, ".scratch", "web", "issues");
 
     await Promise.all([
       store.save(join(issuesDir, "01-a.md"), { agentId: "a1", workspaceId: "w1" }),
