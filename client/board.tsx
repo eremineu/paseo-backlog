@@ -7,7 +7,6 @@ import { type AgentChoice, resolveAgentChoice } from "../shared/agent-choice";
 import { type ActionConfig, renderTemplate } from "../shared/config";
 import { type Board, type Card, branchNameFor, scopeFromEffort } from "../shared/issues";
 import { saveLink, setStatus } from "../shared/rpc";
-import { ActionMenu } from "./action-menu";
 import { Chips } from "./chips";
 import { type CardActions, IssueCard } from "./issue-card";
 import { IssueViewer } from "./issue-viewer";
@@ -31,7 +30,6 @@ const sections: readonly { key: keyof Board; title: string }[] = [
 type Dialog =
   | { kind: "status"; card: Card }
   | { kind: "view"; card: Card }
-  | { kind: "menu"; card: Card }
   | { kind: "options"; card: Card; action: ActionConfig }
   | null;
 
@@ -193,7 +191,12 @@ export const BacklogBoard = ({
     onStatus: (card) => setDialog({ kind: "status", card }),
     onView: (card) => setDialog({ kind: "view", card }),
     onRun: (card, action) => runAction(card, action, null),
-    onMore: (card) => setDialog({ kind: "menu", card }),
+    onOptions: (card) => {
+      const [primary] = actionsOf(card);
+      if (primary) {
+        openOptions(card, primary);
+      }
+    },
     onOpenAgent: openAgent,
   };
 
@@ -307,19 +310,18 @@ export const BacklogBoard = ({
           onClose={() => setDialog(null)}
         />
       ) : null}
-      {dialog?.kind === "menu" ? (
-        <ActionMenu
-          title={`#${dialog.card.id} ${dialog.card.title}`}
-          actions={actionsOf(dialog.card)}
-          styles={styles}
-          onRun={(action) => runAction(dialog.card, action, null)}
-          onOptions={(action) => openOptions(dialog.card, action)}
-          onClose={() => setDialog(null)}
-        />
-      ) : null}
       {dialog?.kind === "options" && effort && optionsChoice ? (
         <PickOptions
+          key={dialog.action.id}
           actionLabel={dialog.action.label}
+          actionId={dialog.action.id}
+          actionChoices={actionsOf(dialog.card).map(({ id, label }) => ({ value: id, label }))}
+          onSwitchAction={(id) => {
+            const next = actionsOf(dialog.card).find((action) => action.id === id);
+            if (next) {
+              openOptions(dialog.card, next);
+            }
+          }}
           file={dialog.card.file}
           inWorktree={usesWorktree(dialog.action)}
           branchTemplate={dialog.action.branch}

@@ -15,6 +15,9 @@ const providerDefaultMode = "";
 
 export const PickOptions = ({
   actionLabel,
+  actionId,
+  actionChoices,
+  onSwitchAction,
   file,
   inWorktree,
   branchTemplate,
@@ -28,6 +31,9 @@ export const PickOptions = ({
   onClose,
 }: {
   actionLabel: string;
+  actionId: string;
+  actionChoices: readonly { value: string; label: string }[];
+  onSwitchAction: (id: string) => void;
   file: string;
   inWorktree: boolean;
   branchTemplate: string;
@@ -75,6 +81,13 @@ export const PickOptions = ({
       }}
     >
       <Modal.Content>
+        {actionChoices.length > 1 ? (
+          <SettingsSection title="Action">
+            <SettingsCard>
+              <SettingsSelect label="Run" value={actionId} options={actionChoices} onValueChange={onSwitchAction} />
+            </SettingsCard>
+          </SettingsSection>
+        ) : null}
         {inWorktree ? (
           <SettingsSection title="Worktree">
             <SettingsCard>

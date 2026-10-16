@@ -9,7 +9,7 @@ By default the tracker is the `.scratch/<effort>/issues/NN-*.md` layout: one fil
 - Switch between efforts. The board opens on the one changed most recently.
 - See issues grouped into In flight, Ready to pick, Yours, Waiting, Later and Done. Blocked issues list what they wait on.
 - Change an issue's status from the card. Only the `Status:` line in the file is rewritten.
-- Start an agent on an issue with the card's button. Each action decides which issues it appears on, whether it runs in a new git worktree or the project folder, which status to set when it starts, which agent to use and what prompt to send. The chevron lists every action that applies, each with options to change the branch and agent for one run.
+- Start an agent on an issue with the card's button. Each action decides which issues it appears on, whether it runs in a new git worktree or the project folder, which status to set when it starts, which agent to use and what prompt to send. The chevron next to the button opens its options, to change the branch and agent for one run, or to run another action that applies.
 - Follow the agent from its card: running, waiting for permission, finished, failed or stopped. Tapping the badge opens the agent.
 - Tap a card's title to read the issue file and copy its path.
 

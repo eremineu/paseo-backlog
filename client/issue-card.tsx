@@ -12,7 +12,7 @@ export interface CardActions {
   onStatus: (card: Card) => void;
   onView: (card: Card) => void;
   onRun: (card: Card, action: ActionConfig) => void;
-  onMore: (card: Card) => void;
+  onOptions: (card: Card) => void;
   onOpenAgent: ((agentId: string) => void) | null;
 }
 
@@ -92,9 +92,9 @@ export const IssueCard = ({
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="More actions"
+                accessibilityLabel={`${primary.label} with options`}
                 disabled={busy}
-                onPress={() => actions.onMore(card)}
+                onPress={() => actions.onOptions(card)}
                 style={[styles.primaryButton, { paddingHorizontal: 6, opacity: busy ? 0.5 : 1 }]}
               >
                 <Icon name="ChevronDown" size={14} color={theme.colors.accentForeground} />
