@@ -23,7 +23,7 @@ const backlogKey = (value: unknown) =>
   value !== null && typeof value === "object" ? Reflect.get(value, "backlog") : undefined;
 
 // A missing file is no layer; any other read failure is reported like a broken one.
-const readRepoLayer = async (projectRoot: string): Promise<LayerRead> => {
+export const readRepoLayer = async (projectRoot: string): Promise<LayerRead> => {
   const path = join(projectRoot, "paseo.json");
   const source = `${path} → backlog`;
   try {
@@ -46,6 +46,18 @@ const merge = (reads: readonly LayerRead[]) => {
 // Built-in defaults, then the repo's `paseo.json` → `backlog`, then the person's own settings.
 export const loadConfig = async (projectRoot: string, personalJson: string) =>
   merge([await readRepoLayer(projectRoot), personalLayer(personalJson)]);
+
+export const previewConfig = async (projectRoot: string | null, personalJson: string) => {
+  if (!projectRoot) {
+    return { repo: null, ...merge([personalLayer(personalJson)]) };
+  }
+  const repo = await readRepoLayer(projectRoot);
+  const source = `${projectRoot}/paseo.json → backlog`;
+  return {
+    repo: { source, value: repo.layer?.value ?? null, problem: repo.problem?.message ?? null },
+    ...merge([repo, personalLayer(personalJson)]),
+  };
+};
 
 // A personal draft on its own, for the settings editor: no project is in view there.
 export const checkPersonalConfig = (json: string) => merge([personalLayer(json)]);

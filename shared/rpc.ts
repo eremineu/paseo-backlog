@@ -66,3 +66,15 @@ export const checkPersonalConfig = defineRpc({
   input: z.object({ json: z.string() }),
   output: z.object({ config: effectiveConfigSchema, problems: z.array(configProblemSchema) }),
 });
+
+// What the settings screen previews for one project: the repo's own layer as written, and the
+// result of every layer together. With no project, only the built-in and personal layers count.
+export const previewConfig = defineRpc({
+  name: "backlog.preview-config",
+  input: z.object({ projectRoot: z.string().nullable() }),
+  output: z.object({
+    repo: z.object({ source: z.string(), value: z.unknown(), problem: z.string().nullable() }).nullable(),
+    config: effectiveConfigSchema,
+    problems: z.array(configProblemSchema),
+  }),
+});

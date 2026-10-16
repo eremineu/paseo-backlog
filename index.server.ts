@@ -2,6 +2,7 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import {
   checkPersonalConfig,
   listEfforts,
+  previewConfig,
   listLinks,
   readBoard,
   readIssue,
@@ -62,6 +63,12 @@ export default function contribute(server: PluginServerContext) {
     return {};
   });
   server.handle(checkPersonalConfig, ({ json }) => configFiles.checkPersonalConfig(json));
+  server.handle(previewConfig, async ({ projectRoot }) => {
+    if (projectRoot) {
+      tracker.assertProjectRoot(projectRoot);
+    }
+    return configFiles.previewConfig(projectRoot, await personalJson());
+  });
 
   return () => {
     stopWatchingSettings();
