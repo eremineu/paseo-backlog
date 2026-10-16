@@ -20,14 +20,14 @@ const statusName = z
   .min(1)
   .transform((name) => name.toLowerCase());
 
-const trackerSchema = z.object({
+export const trackerSchema = z.object({
   folder: relativeFolder,
   statuses: z.array(z.object({ name: statusName, section: z.enum(assignableSections) }).strict()).min(1),
   planningLabelPrefix: z.string(),
 });
 export type TrackerConfig = z.infer<typeof trackerSchema>;
 
-const actionSchema = z.object({
+export const actionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   showFor: z
@@ -57,7 +57,7 @@ export const layerSchema = z
     actions: z.array(z.union([hiddenActionSchema, actionSchema.strict()])).optional(),
   })
   .strict();
-export type ConfigLayer = z.input<typeof layerSchema>;
+export type ConfigLayer = z.output<typeof layerSchema>;
 
 export const effectiveConfigSchema = z.object({ tracker: trackerSchema, actions: z.array(actionSchema) });
 export type EffectiveConfig = z.infer<typeof effectiveConfigSchema>;
