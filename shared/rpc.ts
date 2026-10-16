@@ -1,6 +1,7 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
-import { boardSchema, statusSchema } from "./issues";
+import { configProblemSchema, effectiveConfigSchema } from "./config";
+import { boardSchema } from "./issues";
 
 const effortInput = z.object({ projectRoot: z.string(), effort: z.string() });
 const issueInput = effortInput.extend({ file: z.string() });
@@ -8,7 +9,7 @@ const issueInput = effortInput.extend({ file: z.string() });
 export const listEfforts = defineRpc({
   name: "backlog.efforts",
   input: z.object({ projectRoot: z.string() }),
-  output: z.object({ efforts: z.array(z.string()) }),
+  output: z.object({ efforts: z.array(z.string()), problems: z.array(configProblemSchema) }),
 });
 
 export const readBoard = defineRpc({
@@ -18,10 +19,12 @@ export const readBoard = defineRpc({
     board: boardSchema,
     issuesDir: z.string(),
     mapPath: z.string().nullable(),
+    config: effectiveConfigSchema,
+    problems: z.array(configProblemSchema),
   }),
 });
 
-// Long poll: resolves as soon as anything under `.scratch/` changes, or after a quiet stretch
+// Long poll: resolves as soon as the tracker, `paseo.json` or the personal config changes, or after a quiet stretch
 // shorter than Paseo's 30 s RPC timeout. The client calls it again with the version it got.
 export const waitForChange = defineRpc({
   name: "backlog.wait",
@@ -31,8 +34,8 @@ export const waitForChange = defineRpc({
 
 export const setStatus = defineRpc({
   name: "backlog.set-status",
-  input: issueInput.extend({ status: statusSchema }),
-  output: z.object({ status: statusSchema }),
+  input: issueInput.extend({ status: z.string() }),
+  output: z.object({ status: z.string() }),
 });
 
 export const readIssue = defineRpc({
@@ -54,4 +57,11 @@ export const saveLink = defineRpc({
   name: "backlog.link",
   input: issueInput.extend({ link: agentLinkSchema }),
   output: z.object({}),
+});
+
+// Checks a personal config draft against the built-in defaults, for the settings editor.
+export const checkPersonalConfig = defineRpc({
+  name: "backlog.check-config",
+  input: z.object({ json: z.string() }),
+  output: z.object({ config: effectiveConfigSchema, problems: z.array(configProblemSchema) }),
 });

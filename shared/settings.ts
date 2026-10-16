@@ -12,3 +12,11 @@ export const agentDefaults = defineSettings({
     modeId: z.string().default(""),
   }),
 });
+
+// The person's own config layer, kept as the JSON text they typed so a half-edited value is never lost.
+export const personalConfig = defineSettings({
+  id: "personal-config",
+  scope: "host",
+  version: 1,
+  schema: z.object({ json: z.string().default("") }),
+});

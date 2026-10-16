@@ -1,27 +1,69 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
+import {
+  checkPersonalConfig,
+  listEfforts,
+  listLinks,
+  readBoard,
+  readIssue,
+  saveLink,
+  setStatus,
+  waitForChange,
+} from "./shared/rpc";
+import { personalConfig } from "./shared/settings";
+import * as configFiles from "./server/config";
 import { createLinkStore } from "./server/links";
 import * as tracker from "./server/tracker";
-import { listEfforts, listLinks, readBoard, readIssue, saveLink, setStatus, waitForChange } from "./shared/rpc";
 
 // Paseo reads the default export eagerly, before a `const` is initialised, so this must be a hoisted function.
 export default function contribute(server: PluginServerContext) {
   const feed = tracker.createChangeFeed();
   const links = createLinkStore();
+  const personal = server.registerSettings(personalConfig);
 
-  server.handle(listEfforts, async ({ projectRoot }) => ({ efforts: await tracker.listEfforts(projectRoot) }));
-  server.handle(readBoard, ({ projectRoot, effort }) => tracker.readBoard(projectRoot, effort));
-  server.handle(waitForChange, ({ projectRoot, version }) => feed.waitForChange(projectRoot, version));
-  server.handle(setStatus, ({ projectRoot, effort, file, status }) =>
-    tracker.setStatus(projectRoot, effort, file, status),
-  );
-  server.handle(readIssue, ({ projectRoot, effort, file }) => tracker.readIssue(projectRoot, effort, file));
-  server.handle(listLinks, async ({ projectRoot, effort }) => ({
-    links: await links.linksUnder(tracker.issuesDirOf(projectRoot, effort)),
-  }));
+  const personalJson = async () => {
+    const state = await personal.read();
+    return state.status === "ready" ? state.values.json : "";
+  };
+  const configFor = async (projectRoot: string) => {
+    tracker.assertProjectRoot(projectRoot);
+    return configFiles.loadConfig(projectRoot, await personalJson());
+  };
+
+  const stopWatchingSettings = personal.subscribe(() => feed.bumpAll());
+
+  server.handle(listEfforts, async ({ projectRoot }) => {
+    const { config, problems } = await configFor(projectRoot);
+    return { efforts: await tracker.listEfforts(projectRoot, config.tracker.folder), problems };
+  });
+  server.handle(readBoard, async ({ projectRoot, effort }) => {
+    const { config, problems } = await configFor(projectRoot);
+    return { ...(await tracker.readBoard(projectRoot, effort, config)), config, problems };
+  });
+  server.handle(waitForChange, async ({ projectRoot, version }) => {
+    const { config } = await configFor(projectRoot);
+    return feed.waitForChange(projectRoot, config.tracker.folder, version);
+  });
+  server.handle(setStatus, async ({ projectRoot, effort, file, status }) => {
+    const { config } = await configFor(projectRoot);
+    return tracker.setStatus(projectRoot, config, effort, file, status);
+  });
+  server.handle(readIssue, async ({ projectRoot, effort, file }) => {
+    const { config } = await configFor(projectRoot);
+    return tracker.readIssue(projectRoot, config.tracker.folder, effort, file);
+  });
+  server.handle(listLinks, async ({ projectRoot, effort }) => {
+    const { config } = await configFor(projectRoot);
+    return { links: await links.linksUnder(tracker.issuesDirOf(projectRoot, config.tracker.folder, effort)) };
+  });
   server.handle(saveLink, async ({ projectRoot, effort, file, link }) => {
-    await links.save(tracker.issuePathOf(projectRoot, effort, file), link);
+    const { config } = await configFor(projectRoot);
+    await links.save(tracker.issuePathOf(projectRoot, config.tracker.folder, effort, file), link);
     return {};
   });
+  server.handle(checkPersonalConfig, ({ json }) => configFiles.checkPersonalConfig(json));
 
-  return () => feed.close();
+  return () => {
+    stopWatchingSettings();
+    feed.close();
+  };
 }
