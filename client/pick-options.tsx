@@ -14,30 +14,39 @@ export interface PickOverrides {
 const providerDefaultMode = "";
 
 export const PickOptions = ({
+  actionLabel,
   file,
-  isGit,
+  inWorktree,
+  branchTemplate,
+  defaultType,
   defaultScope,
+  effort,
   defaultChoice,
   catalog,
   styles,
   onStart,
   onClose,
 }: {
+  actionLabel: string;
   file: string;
-  isGit: boolean;
+  inWorktree: boolean;
+  branchTemplate: string;
+  defaultType: string;
   defaultScope: string;
+  effort: string;
   defaultChoice: AgentChoice;
   catalog: readonly CatalogProvider[];
   styles: Styles;
   onStart: (overrides: PickOverrides) => void;
   onClose: () => void;
 }) => {
-  const [type, setType] = useState<string>("feat");
+  const [type, setType] = useState(defaultType);
   const [scope, setScope] = useState(defaultScope);
   const [choice, setChoice] = useState(defaultChoice);
   const provider = catalog.find((entry) => entry.provider === choice.provider);
-  const hasScope = !isGit || /[a-z0-9]/i.test(scope);
-  const branchName = branchNameFor({ type, scope, file });
+  const hasScope = !inWorktree || /[a-z0-9]/i.test(scope);
+  const branchName = branchNameFor({ template: branchTemplate, type, scope, effort, file });
+  const typeOptions = [...new Set([defaultType, ...branchTypes])].map((value) => ({ label: value, value }));
 
   const pickProvider = (next: string) => {
     const resolved = resolveAgentChoice(catalog, { provider: next, model: "", modeId: "" });
@@ -57,7 +66,7 @@ export const PickOptions = ({
 
   return (
     <Modal
-      title="Pick with options"
+      title={`${actionLabel} with options`}
       open
       onOpenChange={(open) => {
         if (!open) {
@@ -66,13 +75,13 @@ export const PickOptions = ({
       }}
     >
       <Modal.Content>
-        {isGit ? (
+        {inWorktree ? (
           <SettingsSection title="Worktree">
             <SettingsCard>
               <SettingsSelect
                 label="Type"
                 value={type}
-                options={branchTypes.map((value) => ({ label: value, value }))}
+                options={typeOptions}
                 onValueChange={setType}
               />
               <SettingsInput
@@ -126,7 +135,7 @@ export const PickOptions = ({
             onPress={() => onStart({ branchName, choice })}
             style={[styles.primaryButton, { opacity: hasScope ? 1 : 0.5 }]}
           >
-            <Text style={styles.primaryButtonText}>{isGit ? "Start in a new worktree" : "Start in the project folder"}</Text>
+            <Text style={styles.primaryButtonText}>{inWorktree ? "Start in a new worktree" : "Start in the project folder"}</Text>
           </Pressable>
         </View>
       </Modal.Content>

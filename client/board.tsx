@@ -3,13 +3,15 @@ import { ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { type Board, type Card, type Status, scopeFromEffort, branchNameFor } from "../shared/issues";
-import { helpPrompt, pickPrompt } from "../shared/prompts";
+import { type AgentChoice, resolveAgentChoice } from "../shared/agent-choice";
+import { type ActionConfig, renderTemplate } from "../shared/config";
+import { type Board, type Card, branchNameFor, scopeFromEffort } from "../shared/issues";
 import { saveLink, setStatus } from "../shared/rpc";
+import { ActionMenu } from "./action-menu";
 import { Chips } from "./chips";
-import { IssueCard, type CardActions } from "./issue-card";
+import { type CardActions, IssueCard } from "./issue-card";
 import { IssueViewer } from "./issue-viewer";
-import { PickOptions, type PickOverrides } from "./pick-options";
+import { type PickOverrides, PickOptions } from "./pick-options";
 import { startInMainCheckout, startInWorktree } from "./start-work";
 import { StatusMenu } from "./status-menu";
 import { useStyles } from "./styles";
@@ -26,7 +28,12 @@ const sections: readonly { key: keyof Board; title: string }[] = [
   { key: "done", title: "Done" },
 ];
 
-type Dialog = { kind: "status"; card: Card } | { kind: "view"; card: Card } | { kind: "options"; card: Card } | null;
+type Dialog =
+  | { kind: "status"; card: Card }
+  | { kind: "view"; card: Card }
+  | { kind: "menu"; card: Card }
+  | { kind: "options"; card: Card; action: ActionConfig }
+  | null;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -51,17 +58,34 @@ export const BacklogBoard = ({
   const { effortNames, effort, setEffort, efforts, board, links } = useBacklog(projectRoot);
   const agentStates = useAgentStates(Object.values(links).map((link) => link.agentId));
   const agents = useDefaultAgentChoice();
-  const { catalog, choice: defaultChoice } = agents;
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [showDone, setShowDone] = useState(false);
 
+  const config = board.data?.config ?? null;
+  const problems = board.data?.problems ?? efforts.data?.problems ?? [];
   const issuesDir = board.data?.issuesDir ?? null;
   const issuePathOf = (card: Card) => `${issuesDir}/${card.file}`;
   const refresh = () => queryClient.invalidateQueries({ queryKey: backlogKey(projectRoot) });
   const openAgent = navigation ? (agentId: string) => navigation.openAgent({ agentId }) : null;
+  const actionsOf = (card: Card) =>
+    card.actionIds.flatMap((id) => config?.actions.filter((action) => action.id === id) ?? []);
+  // A folder without git has no worktrees, so worktree actions run in the project itself.
+  const usesWorktree = (action: ActionConfig) => action.runIn === "worktree" && isGit;
 
-  // Says why no agent can start, so Pick and the options chevron never fail silently.
+  // An action's own agent wins over the personal default; both fall back to provider defaults.
+  const choiceFor = (action: ActionConfig): AgentChoice | null => {
+    if (!action.agent) {
+      return agents.choice;
+    }
+    if (agents.isLoading) {
+      return null;
+    }
+    const { provider, model = "", modeId = "" } = action.agent;
+    return resolveAgentChoice(agents.catalog, { provider, model, modeId });
+  };
+
+  // Says why no agent can start, so an action never fails silently.
   const agentProblem = () => {
     if (agents.isLoading) {
       return "Still loading the agent providers, try again in a moment.";
@@ -79,7 +103,7 @@ export const BacklogBoard = ({
     } catch (error) {
       toast.error(errorText(error));
     } finally {
-      // Refetch before re-enabling the card, or its stale Pick button invites a second worktree.
+      // Refetch before re-enabling the card, or its stale button invites a second start.
       await refresh();
       setBusy((current) => {
         const next = new Set(current);
@@ -89,7 +113,7 @@ export const BacklogBoard = ({
     }
   };
 
-  const changeStatus = (card: Card, status: Status) => {
+  const changeStatus = (card: Card, status: string) => {
     setDialog(null);
     if (!effort) {
       return;
@@ -99,95 +123,101 @@ export const BacklogBoard = ({
     });
   };
 
-  const pick = (card: Card, overrides: PickOverrides | null) => {
+  const defaultBranch = (card: Card, action: ActionConfig) =>
+    branchNameFor({
+      template: action.branch,
+      type: action.branchType,
+      scope: scopeFromEffort(effort ?? ""),
+      effort: effort ?? "",
+      file: card.file,
+    });
+
+  const runAction = (card: Card, action: ActionConfig, overrides: PickOverrides | null) => {
     setDialog(null);
-    const choice = overrides?.choice ?? defaultChoice;
     if (!effort || !issuesDir) {
       return;
     }
+    const choice = overrides?.choice ?? choiceFor(action);
     if (!choice) {
       toast.error(agentProblem());
       return;
     }
-    const branchName =
-      overrides?.branchName ?? branchNameFor({ type: "feat", scope: scopeFromEffort(effort), file: card.file });
-    // The status is written before the agent starts, since the agent edits the same file and must not be overwritten.
-    // A folder without git has no worktrees, so the agent works in the project itself.
+    const inWorktree = usesWorktree(action);
+    const branchName = inWorktree ? (overrides?.branchName ?? defaultBranch(card, action)) : "";
+    const issuePath = issuePathOf(card);
+    const prompt = renderTemplate(action.prompt, {
+      issue: issuePath,
+      map: board.data?.mapPath ?? issuePath,
+      project: projectRoot,
+      branch: branchName,
+      id: card.id,
+      title: card.title,
+      effort,
+    });
     const start = () =>
-      isGit
-        ? startInWorktree({
-            paseo,
-            projectRoot,
-            card,
-            branchName,
-            prompt: pickPrompt(issuePathOf(card), true),
-            choice,
-            issuePath: issuePathOf(card),
-          })
-        : startInMainCheckout({
-            paseo,
-            projectRoot,
-            card,
-            prompt: pickPrompt(issuePathOf(card), false),
-            choice,
-            issuePath: issuePathOf(card),
-          });
+      inWorktree
+        ? startInWorktree({ paseo, projectRoot, card, branchName, prompt, choice, issuePath })
+        : startInMainCheckout({ paseo, projectRoot, card, prompt, choice, issuePath });
+
+    // The status is written before the agent starts, since the agent edits the same file and must not be overwritten.
     void withBusy(card, async () => {
-      await writeStatus({ projectRoot, effort, file: card.file, status: "in-progress" });
+      const { setStatus: startStatus } = action;
+      if (startStatus) {
+        await writeStatus({ projectRoot, effort, file: card.file, status: startStatus });
+      }
       const link = await start().catch(async (error: unknown) => {
-        await writeStatus({ projectRoot, effort, file: card.file, status: "ready-for-agent" });
+        if (startStatus) {
+          await writeStatus({ projectRoot, effort, file: card.file, status: card.status });
+        }
         throw error;
       });
       await writeLink({ projectRoot, effort, file: card.file, link });
-      toast.show(isGit ? `Started on ${branchName}` : "Started in the project folder", { variant: "success" });
+      toast.show(inWorktree ? `Started on ${branchName}` : `${action.label}: agent started`, { variant: "success" });
       openAgent?.(link.agentId);
     });
   };
 
-  const help = (card: Card) => {
-    if (!effort || !issuesDir) {
-      return;
-    }
-    if (!defaultChoice) {
+  const openOptions = (card: Card, action: ActionConfig) => {
+    if (!choiceFor(action)) {
+      setDialog(null);
       toast.error(agentProblem());
       return;
     }
-    void withBusy(card, async () => {
-      const link = await startInMainCheckout({
-        paseo,
-        projectRoot,
-        card,
-        prompt: helpPrompt(card, issuePathOf(card), board.data?.mapPath ?? null),
-        choice: defaultChoice,
-        issuePath: issuePathOf(card),
-      });
-      await writeLink({ projectRoot, effort, file: card.file, link });
-      openAgent?.(link.agentId);
-    });
+    setDialog({ kind: "options", card, action });
   };
 
-  const actions: CardActions = {
+  const cardActions: CardActions = {
     onStatus: (card) => setDialog({ kind: "status", card }),
     onView: (card) => setDialog({ kind: "view", card }),
-    onPick: (card) => pick(card, null),
-    onPickWithOptions: (card) => {
-      if (!defaultChoice) {
-        toast.error(agentProblem());
-        return;
-      }
-      setDialog({ kind: "options", card });
-    },
-    onHelp: help,
+    onRun: (card, action) => runAction(card, action, null),
+    onMore: (card) => setDialog({ kind: "menu", card }),
     onOpenAgent: openAgent,
   };
+
+  const renderProblems = () =>
+    problems.length === 0 ? null : (
+      <View style={[styles.card, { borderColor: theme.colors.statusWarning }]}>
+        <Text style={[styles.text, { color: theme.colors.statusWarning }]}>
+          Some backlog config was skipped and the rest still applies:
+        </Text>
+        {problems.map((problem) => (
+          <Text key={`${problem.source}:${problem.message}`} selectable style={styles.muted}>
+            {problem.source}: {problem.message}
+          </Text>
+        ))}
+      </View>
+    );
 
   const renderBody = () => {
     if (efforts.isLoading) {
       return <Text style={styles.muted}>Loading…</Text>;
     }
     if (effortNames.length === 0) {
+      const folder = config?.tracker.folder ?? ".scratch";
       return (
-        <Text style={styles.muted}>No tracker in {projectRoot}. Efforts live in .scratch/&lt;effort&gt;/issues/.</Text>
+        <Text style={styles.muted}>
+          No tracker in {projectRoot}. Efforts live in {folder}/&lt;effort&gt;/issues/.
+        </Text>
       );
     }
     if (board.error) {
@@ -219,18 +249,21 @@ export const BacklogBoard = ({
                 <IssueCard
                   key={card.file}
                   card={card}
+                  cardActions={actionsOf(card)}
                   link={links[card.file]}
                   agent={agentStates.get(links[card.file]?.agentId ?? "") ?? null}
                   busy={busy.has(card.file)}
                   theme={theme}
                   styles={styles}
-                  actions={actions}
+                  actions={cardActions}
                 />
               ))}
         </View>
       );
     });
   };
+
+  const optionsChoice = dialog?.kind === "options" ? choiceFor(dialog.action) : null;
 
   return (
     <View style={styles.screen}>
@@ -240,23 +273,22 @@ export const BacklogBoard = ({
           {header}
           {effortNames.length > 1 ? (
             <Chips
-              options={effortNames.map((name) => ({
-                value: name,
-                label: name,
-              }))}
+              options={effortNames.map((name) => ({ value: name, label: name }))}
               value={effort}
               styles={styles}
               onChange={setEffort}
             />
           ) : null}
         </View>
+        {renderProblems()}
         {renderBody()}
       </ScrollView>
 
-      {dialog?.kind === "status" ? (
+      {dialog?.kind === "status" && config ? (
         <StatusMenu
           title={`#${dialog.card.id} status`}
           current={dialog.card.status}
+          statuses={config.tracker.statuses.map((status) => status.name)}
           styles={styles}
           onPick={(status) => changeStatus(dialog.card, status)}
           onClose={() => setDialog(null)}
@@ -272,15 +304,29 @@ export const BacklogBoard = ({
           onClose={() => setDialog(null)}
         />
       ) : null}
-      {dialog?.kind === "options" && effort && defaultChoice ? (
-        <PickOptions
-          file={dialog.card.file}
-          isGit={isGit}
-          defaultScope={scopeFromEffort(effort)}
-          defaultChoice={defaultChoice}
-          catalog={catalog}
+      {dialog?.kind === "menu" ? (
+        <ActionMenu
+          title={`#${dialog.card.id} ${dialog.card.title}`}
+          actions={actionsOf(dialog.card)}
           styles={styles}
-          onStart={(overrides) => pick(dialog.card, overrides)}
+          onRun={(action) => runAction(dialog.card, action, null)}
+          onOptions={(action) => openOptions(dialog.card, action)}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {dialog?.kind === "options" && effort && optionsChoice ? (
+        <PickOptions
+          actionLabel={dialog.action.label}
+          file={dialog.card.file}
+          inWorktree={usesWorktree(dialog.action)}
+          branchTemplate={dialog.action.branch}
+          defaultType={dialog.action.branchType}
+          defaultScope={scopeFromEffort(effort)}
+          effort={effort}
+          defaultChoice={optionsChoice}
+          catalog={agents.catalog}
+          styles={styles}
+          onStart={(overrides) => runAction(dialog.card, dialog.action, overrides)}
           onClose={() => setDialog(null)}
         />
       ) : null}

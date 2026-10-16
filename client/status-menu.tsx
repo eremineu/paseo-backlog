@@ -1,19 +1,20 @@
 import { Modal } from "@getpaseo/plugin/client/react-native";
 import { Pressable, Text } from "react-native";
-import { type Status, statuses } from "../shared/issues";
 import type { Styles } from "./styles";
 
 export const StatusMenu = ({
   title,
   current,
+  statuses,
   styles,
   onPick,
   onClose,
 }: {
   title: string;
   current: string;
+  statuses: readonly string[];
   styles: Styles;
-  onPick: (status: Status) => void;
+  onPick: (status: string) => void;
   onClose: () => void;
 }) => (
   <Modal
