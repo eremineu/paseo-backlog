@@ -18,8 +18,9 @@ const starter = JSON.stringify(
   2,
 );
 
-// The personal layer: the same shape as `paseo.json` → `backlog`, checked before it is saved.
-export const PersonalConfigSection = ({ theme, compact }: { theme: PluginTheme; compact: boolean }) => {
+// The personal layer as raw JSON, the same shape as `paseo.json` → `backlog`: for fixing a broken
+// layer, or copying a config to a colleague. Collapsed, since the forms above cover everyday edits.
+export const AdvancedConfigSection = ({ theme, compact }: { theme: PluginTheme; compact: boolean }) => {
   const styles = useStyles(theme, compact);
   const settings = useSettings(personalConfig);
   const check = useRpc(checkPersonalConfig);
@@ -27,6 +28,7 @@ export const PersonalConfigSection = ({ theme, compact }: { theme: PluginTheme; 
   const [draft, setDraft] = useState<string | null>(null);
   const [result, setResult] = useState<Awaited<ReturnType<typeof check>> | null>(null);
   const [showDefaults, setShowDefaults] = useState(false);
+  const [open, setOpen] = useState(false);
 
   if (settings.status === "loading") {
     return <Text style={styles.muted}>Loading…</Text>;
@@ -56,12 +58,31 @@ export const PersonalConfigSection = ({ theme, compact }: { theme: PluginTheme; 
     toast.show("Built-in config copied", { variant: "success" });
   };
 
+  const toggle = (
+    <Pressable accessibilityRole="button" onPress={() => setOpen((current) => !current)} style={styles.button}>
+      <Text style={styles.buttonText}>{open ? "Hide JSON" : "Edit as JSON"}</Text>
+    </Pressable>
+  );
+
+  if (!open) {
+    return (
+      <SettingsSection title="Advanced" trailing={toggle}>
+        <SettingsCard>
+          <SettingsRow
+            label="Your config as JSON"
+            hint="Edit it directly, fix a layer the forms can't read, or copy it to share with a colleague."
+          />
+        </SettingsCard>
+      </SettingsSection>
+    );
+  }
+
   return (
-    <SettingsSection title="Your backlog config">
+    <SettingsSection title="Advanced" trailing={toggle}>
       <SettingsCard>
         <SettingsRow
-          label="Personal layer"
-          hint="Same shape as the backlog key in a repo's paseo.json. It applies on top of the repo's config, for you only. Actions merge by id; { id, hidden: true } hides one."
+          label="Your config as JSON"
+          hint="Same shape as the backlog key in a repo's paseo.json, without the outer key. Actions merge by id; { id, hidden: true } hides one."
         >
           <View style={{ gap: 8, alignSelf: "stretch" }}>
             <TextInput

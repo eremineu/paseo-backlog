@@ -3,7 +3,7 @@ import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect } from "@get
 import { Text, View } from "react-native";
 import { resolveAgentChoice } from "../shared/agent-choice";
 import { agentDefaults } from "../shared/settings";
-import { PersonalConfigSection } from "./personal-config-section";
+import { ConfigSettings } from "./config-settings";
 import { useProviderCatalog } from "./use-agent-choice";
 
 const providerDefault = "";
@@ -60,6 +60,6 @@ const AgentDefaultsSection = ({ theme }: Pick<PluginSurfaceProps, "theme">) => {
 export const SettingsScreen = ({ theme, layout }: PluginSurfaceProps) => (
   <View style={{ gap: 24 }}>
     <AgentDefaultsSection theme={theme} />
-    <PersonalConfigSection theme={theme} compact={layout.compact} />
+    <ConfigSettings theme={theme} compact={layout.compact} />
   </View>
 );
