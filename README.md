@@ -64,7 +64,7 @@ Tracker fields override one by one, so a repo can change only `folder`. A `statu
 
 ### Actions
 
-Actions merge by `id`: the same id replaces that action, a new id is added at the end, `{ "id": "…", "hidden": true }` removes one. The first action that applies to a card is its button. The chevron next to it opens the options dialog for that action, to change the branch and agent for one run; when several actions apply, the dialog also lets you pick which one to run.
+Actions merge by `id`: the same id replaces that action, a new id is added at the end, `{ "id": "…", "hidden": true }` removes one. The first action whose `showFor` matches a card is its main button. The chevron next to it opens the options dialog, to change the branch and agent for one run or to run any other action: every action can be run on any open card from there, matching ones listed first. Cards with no matching action get a "Run…" button that opens the same dialog.
 
 | Field | Default | Meaning |
 | --- | --- | --- |

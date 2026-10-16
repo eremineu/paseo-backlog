@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { type AgentChoice, resolveAgentChoice } from "../shared/agent-choice";
-import { type ActionConfig, renderTemplate } from "../shared/config";
+import { type ActionConfig, isDoneStatus, renderTemplate } from "../shared/config";
 import { type Board, type Card, branchNameFor, scopeFromEffort } from "../shared/issues";
 import { saveLink, setStatus } from "../shared/rpc";
 import { Chips } from "./chips";
@@ -68,6 +68,14 @@ export const BacklogBoard = ({
   const openAgent = navigation ? (agentId: string) => navigation.openAgent({ agentId }) : null;
   const actionsOf = (card: Card) =>
     card.actionIds.flatMap((id) => config?.actions.filter((action) => action.id === id) ?? []);
+  // The status rule only decides the card's main button; any open card can run every action from its options.
+  const offeredActions = (card: Card) => {
+    if (!config || isDoneStatus(config.tracker, card.status)) {
+      return [];
+    }
+    const matching = actionsOf(card);
+    return [...matching, ...config.actions.filter((action) => !matching.includes(action))];
+  };
   // A folder without git has no worktrees, so worktree actions run in the project itself.
   const usesWorktree = (action: ActionConfig) => action.runIn === "worktree" && isGit;
 
@@ -192,7 +200,7 @@ export const BacklogBoard = ({
     onView: (card) => setDialog({ kind: "view", card }),
     onRun: (card, action) => runAction(card, action, null),
     onOptions: (card) => {
-      const [primary] = actionsOf(card);
+      const [primary] = offeredActions(card);
       if (primary) {
         openOptions(card, primary);
       }
@@ -255,7 +263,8 @@ export const BacklogBoard = ({
                 <IssueCard
                   key={card.file}
                   card={card}
-                  cardActions={actionsOf(card)}
+                  primaryAction={actionsOf(card)[0]}
+                  canRunOthers={offeredActions(card).length > 0}
                   link={links[card.file]}
                   agent={agentStates.get(links[card.file]?.agentId ?? "") ?? null}
                   busy={busy.has(card.file)}
@@ -315,9 +324,9 @@ export const BacklogBoard = ({
           key={dialog.action.id}
           actionLabel={dialog.action.label}
           actionId={dialog.action.id}
-          actionChoices={actionsOf(dialog.card).map(({ id, label }) => ({ value: id, label }))}
+          actionChoices={offeredActions(dialog.card).map(({ id, label }) => ({ value: id, label }))}
           onSwitchAction={(id) => {
-            const next = actionsOf(dialog.card).find((action) => action.id === id);
+            const next = offeredActions(dialog.card).find((action) => action.id === id);
             if (next) {
               openOptions(dialog.card, next);
             }

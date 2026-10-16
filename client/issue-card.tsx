@@ -18,7 +18,8 @@ export interface CardActions {
 
 export const IssueCard = ({
   card,
-  cardActions,
+  primaryAction: primary,
+  canRunOthers,
   link,
   agent,
   busy,
@@ -27,7 +28,8 @@ export const IssueCard = ({
   actions,
 }: {
   card: Card;
-  cardActions: readonly ActionConfig[];
+  primaryAction: ActionConfig | undefined;
+  canRunOthers: boolean;
   link: AgentLink | undefined;
   agent: AgentState | null;
   busy: boolean;
@@ -35,7 +37,6 @@ export const IssueCard = ({
   styles: Styles;
   actions: CardActions;
 }) => {
-  const [primary] = cardActions;
   return (
     <View style={styles.card}>
       <Pressable
@@ -100,6 +101,16 @@ export const IssueCard = ({
                 <Icon name="ChevronDown" size={14} color={theme.colors.accentForeground} />
               </Pressable>
             </View>
+          ) : null}
+          {!primary && canRunOthers ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => actions.onOptions(card)}
+              style={[styles.button, { opacity: busy ? 0.5 : 1 }]}
+            >
+              <Text style={styles.buttonText}>{busy ? "Starting…" : "Run…"}</Text>
+            </Pressable>
           ) : null}
         </View>
       </View>
