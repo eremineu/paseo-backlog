@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { builtInConfig, mergeConfig } from "./config";
 import {
   branchNameFor,
   buildBoard,
@@ -27,7 +28,6 @@ describe("parseIssue", () => {
       assignee: "unclaimed",
       labels: ["ui", "freya"],
       blockers: ["1", "2"],
-      isPlanning: false,
       summary: "The tab shows team ratios.",
     });
   });
@@ -48,8 +48,8 @@ describe("parseIssue", () => {
     expect(issue).toMatchObject({ title: "A", status: "in-review", blockers: ["2"] });
   });
 
-  it("marks wayfinder issues as planning", () => {
-    expect(parseIssue("01-a.md", issueText("Labels: wayfinder:grilling")).isPlanning).toBe(true);
+  it("keeps labels for the board to classify", () => {
+    expect(parseIssue("01-a.md", issueText("Labels: wayfinder:grilling")).labels).toEqual(["wayfinder:grilling"]);
   });
 });
 
@@ -76,7 +76,7 @@ describe("buildBoard", () => {
     parseIssue("06-wip.md", issueText("Status: in-progress")),
     parseIssue("07-plan.md", issueText("Status: ready-for-agent\nLabels: wayfinder:research")),
   ];
-  const board = buildBoard(issues);
+  const board = buildBoard(issues, builtInConfig);
   const ids = (cards: readonly { id: string }[]) => cards.map((card) => card.id);
 
   it("groups issues into sections", () => {
@@ -89,7 +89,7 @@ describe("buildBoard", () => {
   });
 
   it("keeps an issue with an unknown status on the board", () => {
-    const unknown = buildBoard([parseIssue("09-odd.md", issueText("Status: blocked"))]);
+    const unknown = buildBoard([parseIssue("09-odd.md", issueText("Status: blocked"))], builtInConfig);
 
     expect(ids(unknown.later)).toEqual(["09"]);
   });
@@ -99,16 +99,38 @@ describe("buildBoard", () => {
     expect(board.ready[0].waitingFor).toEqual([]);
   });
 
-  it("offers Pick only on unblocked build tasks ready for an agent", () => {
-    const pickable = [...board.ready, ...board.waiting, ...board.yours].filter((card) => card.canPick);
+  it("lists the actions that apply to each card, in config order", () => {
+    const all = [...board.inFlight, ...board.ready, ...board.waiting, ...board.yours, ...board.later, ...board.done];
+    const actionsById = Object.fromEntries(all.map((card) => [card.id, card.actionIds]));
 
-    expect(ids(pickable)).toEqual(["02"]);
+    expect(actionsById).toEqual({
+      "01": [],
+      "02": ["pick"],
+      "03": [],
+      "04": ["help"],
+      "05": ["plan"],
+      "06": [],
+      "07": ["decide"],
+    });
   });
 
-  it("offers Help me on human, triage and planning cards", () => {
-    const all = [...board.inFlight, ...board.ready, ...board.waiting, ...board.yours, ...board.later, ...board.done];
+  it("uses the configured statuses and planning label", () => {
+    const { config } = mergeConfig([
+      {
+        source: "test",
+        value: {
+          version: 1,
+          tracker: { statuses: [{ name: "todo", section: "ready" }], planningLabelPrefix: "spike" },
+        },
+      },
+    ]);
+    const custom = buildBoard(
+      [parseIssue("01-a.md", issueText("Status: todo")), parseIssue("02-b.md", issueText("Status: todo\nLabels: spike"))],
+      config,
+    );
 
-    expect(ids(all.filter((card) => card.canHelp))).toEqual(["04", "07", "05"]);
+    expect(ids(custom.ready)).toEqual(["01"]);
+    expect(ids(custom.yours)).toEqual(["02"]);
   });
 });
 
@@ -151,13 +173,14 @@ describe("branch names", () => {
   });
 
   it("joins type, scope and slug", () => {
-    expect(branchNameFor({ type: "feat", scope: "freya", file: "07-thor-overview.md" })).toBe(
+    expect(branchNameFor({ template: "{type}/{effortPrefix}/{slug}", type: "feat", scope: "freya", effort: "freya-backlog", file: "07-thor-overview.md" })).toBe(
       "feat/freya/07-thor-overview",
     );
   });
 
   it("turns a typed scope into a valid ref segment", () => {
-    expect(branchNameFor({ type: "fix", scope: " Raiden/UI ", file: "01-a.md" })).toBe("fix/raiden-ui/01-a");
+    expect(branchNameFor({ template: "{type}/{effortPrefix}/{slug}", type: "fix", scope: " Raiden/UI ", effort: "x", file: "01-a.md" })).toBe("fix/raiden-ui/01-a");
+    expect(branchNameFor({ template: "work/{effort}-{id}", type: "feat", scope: "x", effort: "Freya Backlog", file: "07-a.md" })).toBe("work/freya-backlog-07");
     expect(scopeFromEffort("Foo_Bar-x")).toBe("foo-bar");
   });
 });

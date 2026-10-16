@@ -1,24 +1,5 @@
 import { z } from "zod";
-
-export const statuses = [
-  "needs-triage",
-  "needs-info",
-  "ready-for-agent",
-  "ready-for-human",
-  "in-progress",
-  "in-review",
-  "done",
-  "closed",
-  "wontfix",
-] as const;
-
-export const statusSchema = z.enum(statuses);
-export type Status = z.infer<typeof statusSchema>;
-
-const doneStatuses: ReadonlySet<string> = new Set(["closed", "done", "wontfix"]);
-const laterStatuses: ReadonlySet<string> = new Set(["needs-triage", "needs-info"]);
-const inFlightStatuses: ReadonlySet<string> = new Set(["in-progress", "in-review"]);
-const knownStatuses: ReadonlySet<string> = new Set(statuses);
+import { type EffectiveConfig, appliesTo, isDoneStatus, renderTemplate, sectionOf } from "./config";
 
 export const issueSchema = z.object({
   id: z.string(),
@@ -28,15 +9,15 @@ export const issueSchema = z.object({
   assignee: z.string(),
   labels: z.array(z.string()),
   blockers: z.array(z.string()),
-  isPlanning: z.boolean(),
   summary: z.string(),
 });
 export type Issue = z.infer<typeof issueSchema>;
 
 export const cardSchema = issueSchema.extend({
+  isPlanning: z.boolean(),
   waitingFor: z.array(z.object({ id: z.string(), title: z.string() })),
-  canPick: z.boolean(),
-  canHelp: z.boolean(),
+  // Ids of the configured actions that apply, in config order; the first is the card's button.
+  actionIds: z.array(z.string()),
 });
 export type Card = z.infer<typeof cardSchema>;
 
@@ -111,58 +92,58 @@ export const parseIssue = (file: string, text: string): Issue => {
   return {
     id: file.match(/^(\d+)/)?.[1] ?? file,
     file,
-    title: (lines.find((line) => line.startsWith("# ")) ?? `# ${file}`).slice(2).trim(),    status: headerField(lines, "Status").toLowerCase() || "needs-triage",
+    title: (lines.find((line) => line.startsWith("# ")) ?? `# ${file}`).slice(2).trim(),
+    status: headerField(lines, "Status").toLowerCase() || "needs-triage",
     assignee: headerField(lines, "Assignee"),
     labels,
     blockers: parseBlockers(headerField(lines, "Blocked by")),
-    isPlanning: labels.some((label) => label.startsWith("wayfinder:")),
     summary: firstParagraph(body),
   };
 };
 
-export const isDone = (status: string) => doneStatuses.has(status);
-
-export const buildBoard = (issues: readonly Issue[]): Board => {
+export const buildBoard = (issues: readonly Issue[], config: EffectiveConfig): Board => {
+  const { tracker } = config;
   const byId = new Map(issues.map((issue) => [issueKey(issue.id), issue]));
   const openBlockers = (issue: Issue) =>
     issue.blockers
       .map((id) => byId.get(id))
-      .filter((blocker): blocker is Issue => blocker !== undefined && !isDone(blocker.status))
+      .filter((blocker): blocker is Issue => blocker !== undefined && !isDoneStatus(tracker, blocker.status))
       .map(({ id, title }) => ({ id, title }));
 
   const cards: Card[] = issues.map((issue) => {
     const waitingFor = openBlockers(issue);
-    const unblocked = waitingFor.length === 0;
-    const isBuild = !issue.isPlanning;
+    const isPlanning =
+      tracker.planningLabelPrefix !== "" && issue.labels.some((label) => label.startsWith(tracker.planningLabelPrefix));
+    const facts = { status: issue.status, isPlanning, isBlocked: waitingFor.length > 0 };
     return {
       ...issue,
+      isPlanning,
       waitingFor,
-      canPick: isBuild && unblocked && issue.status === "ready-for-agent",
-      canHelp:
-        unblocked &&
-        (issue.status === "ready-for-human" ||
-          issue.status === "needs-triage" ||
-          (issue.isPlanning && !isDone(issue.status))),
+      actionIds: config.actions.filter((action) => appliesTo(action, tracker, facts)).map((action) => action.id),
     };
   });
 
-  const isActionable = (card: Card) => card.status === "ready-for-agent" || card.status === "ready-for-human";
-  const isWaiting = (card: Card) => card.waitingFor.length > 0;
-  const isOpenPlanning = (card: Card) =>
-    card.isPlanning && !isDone(card.status) && !laterStatuses.has(card.status) && !inFlightStatuses.has(card.status);
-
-  return {
-    inFlight: cards.filter((card) => inFlightStatuses.has(card.status)),
-    ready: cards.filter((card) => card.canPick),
-    yours: cards.filter((card) => !isWaiting(card) && (card.status === "ready-for-human" || isOpenPlanning(card))),
-    waiting: cards.filter((card) => isWaiting(card) && isActionable(card)),
-    // A status outside the known set (`blocked`, `done (2026-10-01)`) still shows, so it can be fixed from its card.
-    later: cards.filter((card) => laterStatuses.has(card.status) || !knownStatuses.has(card.status)),
-    done: cards.filter((card) => isDone(card.status)),
+  const sectionFor = (card: Card) => {
+    const section = sectionOf(tracker, card.status);
+    const isActionable = section === "ready" || section === "yours";
+    if (isActionable && card.waitingFor.length > 0) {
+      return "waiting";
+    }
+    // Planning work is a decision for a person, even when its status says an agent could pick it.
+    if (section === "ready" && card.isPlanning) {
+      return "yours";
+    }
+    return section;
   };
+
+  const board: Board = { inFlight: [], ready: [], yours: [], waiting: [], later: [], done: [] };
+  for (const card of cards) {
+    board[sectionFor(card)].push(card);
+  }
+  return board;
 };
 
-export const replaceStatus = (text: string, status: Status) => {
+export const replaceStatus = (text: string, status: string) => {
   const lines = text.split("\n");
   const pattern = headerPattern("Status");
   const headerEnd = headerLines(lines).length;
@@ -187,7 +168,25 @@ export const scopeFromEffort = (effort: string) => slugify(effort.split("-")[0])
 export const slugFromFile = (file: string) => slugify(file.replace(/\.md$/, ""));
 
 export const branchTypes = ["feat", "fix", "chore", "refactor", "docs", "test", "perf", "ci"] as const;
-export type BranchType = (typeof branchTypes)[number];
 
-export const branchNameFor = ({ type, scope, file }: { type: string; scope: string; file: string }) =>
-  `${type}/${slugify(scope)}/${slugFromFile(file)}`;
+// Each placeholder becomes a valid ref segment; the template's own slashes and literal text stay as written.
+export const branchNameFor = ({
+  template,
+  type,
+  scope,
+  effort,
+  file,
+}: {
+  template: string;
+  type: string;
+  scope: string;
+  effort: string;
+  file: string;
+}) =>
+  renderTemplate(template, {
+    type: slugify(type),
+    effortPrefix: slugify(scope),
+    effort: slugify(effort),
+    slug: slugFromFile(file),
+    id: slugify(file.match(/^(\d+)/)?.[1] ?? slugFromFile(file)),
+  });
