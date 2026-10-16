@@ -6,13 +6,23 @@ export const assignableSections = ["inFlight", "ready", "yours", "later", "done"
 const relativeFolder = z
   .string()
   .min(1)
-  .refine((folder) => !folder.startsWith("/") && !folder.split(/[/\\]/).includes(".."), {
-    message: "must be a folder inside the project",
-  });
+  .refine(
+    (folder) => {
+      const parts = folder.split(/[/\\]/).filter((part) => part !== "" && part !== ".");
+      return !folder.startsWith("/") && parts.length > 0 && !parts.includes("..");
+    },
+    { message: "must be a folder inside the project" },
+  );
+
+// Issue files are read case-insensitively, so configured names are too.
+const statusName = z
+  .string()
+  .min(1)
+  .transform((name) => name.toLowerCase());
 
 const trackerSchema = z.object({
   folder: relativeFolder,
-  statuses: z.array(z.object({ name: z.string().min(1), section: z.enum(assignableSections) })).min(1),
+  statuses: z.array(z.object({ name: statusName, section: z.enum(assignableSections) }).strict()).min(1),
   planningLabelPrefix: z.string(),
 });
 export type TrackerConfig = z.infer<typeof trackerSchema>;
@@ -23,16 +33,17 @@ const actionSchema = z.object({
   showFor: z
     .object({
       // Omitted: every status outside the done section.
-      statuses: z.array(z.string()).optional(),
+      statuses: z.array(statusName).optional(),
       planning: z.enum(["any", "only", "exclude"]).default("any"),
       blocked: z.boolean().default(false),
     })
+    .strict()
     .default({ planning: "any", blocked: false }),
   runIn: z.enum(["worktree", "project"]),
   branch: z.string().min(1).default("{type}/{effortPrefix}/{slug}"),
   branchType: z.string().min(1).default("feat"),
-  setStatus: z.string().nullable().default(null),
-  agent: z.object({ provider: z.string(), model: z.string().optional(), modeId: z.string().optional() }).optional(),
+  setStatus: statusName.nullable().default(null),
+  agent: z.object({ provider: z.string(), model: z.string().optional(), modeId: z.string().optional() }).strict().optional(),
   prompt: z.string().min(1),
 });
 export type ActionConfig = z.infer<typeof actionSchema>;
@@ -42,7 +53,7 @@ const hiddenActionSchema = z.object({ id: z.string().min(1), hidden: z.literal(t
 export const layerSchema = z
   .object({
     version: z.literal(1),
-    tracker: trackerSchema.partial().optional(),
+    tracker: trackerSchema.partial().strict().optional(),
     actions: z.array(z.union([hiddenActionSchema, actionSchema.strict()])).optional(),
   })
   .strict();
@@ -51,7 +62,8 @@ export type ConfigLayer = z.input<typeof layerSchema>;
 export const effectiveConfigSchema = z.object({ tracker: trackerSchema, actions: z.array(actionSchema) });
 export type EffectiveConfig = z.infer<typeof effectiveConfigSchema>;
 
-export const configProblemSchema = z.object({ source: z.string(), message: z.string() });
+// `skipped`: the whole layer was ignored. Otherwise it is a warning about a config that still applies.
+export const configProblemSchema = z.object({ source: z.string(), message: z.string(), skipped: z.boolean() });
 export type ConfigProblem = z.infer<typeof configProblemSchema>;
 
 export const builtInConfig: EffectiveConfig = effectiveConfigSchema.parse({
@@ -135,7 +147,7 @@ export const mergeConfig = (layers: readonly { source: string; value: unknown }[
     }
     const parsed = layerSchema.safeParse(value);
     if (!parsed.success) {
-      problems.push({ source, message: firstIssue(parsed.error) });
+      problems.push({ source, message: firstIssue(parsed.error), skipped: true });
       continue;
     }
     tracker = { ...tracker, ...parsed.data.tracker };
@@ -150,7 +162,26 @@ export const mergeConfig = (layers: readonly { source: string; value: unknown }[
       }
     }
   }
-  return { config: { tracker, actions }, problems };
+  return { config: { tracker, actions }, problems: [...problems, ...unknownStatuses(tracker, actions)] };
+};
+
+// Not fatal, since the rest of the config is fine, but an action naming a status the tracker
+// doesn't know never shows, or fails when it starts, so it is reported next to layer problems.
+const unknownStatuses = (tracker: TrackerConfig, actions: readonly ActionConfig[]): ConfigProblem[] => {
+  const known = new Set(tracker.statuses.map((status) => status.name));
+  return actions.flatMap((action) => {
+    const named = [...(action.showFor.statuses ?? []), ...(action.setStatus ? [action.setStatus] : [])];
+    const missing = [...new Set(named.filter((status) => !known.has(status)))];
+    return missing.length === 0
+      ? []
+      : [
+          {
+            source: `action "${action.id}"`,
+            message: `uses statuses the tracker doesn't list: ${missing.join(", ")}`,
+            skipped: false,
+          },
+        ];
+  });
 };
 
 export const sectionOf = (tracker: TrackerConfig, status: string) =>

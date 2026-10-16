@@ -62,9 +62,34 @@ describe("mergeConfig", () => {
   });
 
   it("rejects unknown keys so typos don't pass silently", () => {
-    const { problems } = mergeConfig([{ source: "personal", value: { version: 1, action: [] } }]);
+    const typo = (value: object) => mergeConfig([{ source: "personal", value: { version: 1, ...value } }]).problems;
 
-    expect(problems).toHaveLength(1);
+    expect(typo({ action: [] })).toHaveLength(1);
+    expect(typo({ actions: [action("x", { showFor: { status: ["todo"] } })] })[0].skipped).toBe(true);
+    expect(typo({ tracker: { folders: "x" } })[0].skipped).toBe(true);
+  });
+
+  it("reads status names case-insensitively, like issue files", () => {
+    const { config } = mergeConfig([
+      { source: "repo", value: { version: 1, tracker: { statuses: [{ name: "Doing", section: "inFlight" }] } } },
+    ]);
+
+    expect(sectionOf(config.tracker, "doing")).toBe("inFlight");
+  });
+
+  it("warns, without skipping, when an action names a status the tracker lacks", () => {
+    const { config, problems } = mergeConfig([
+      { source: "repo", value: { version: 1, tracker: { statuses: [{ name: "todo", section: "ready" }] } } },
+    ]);
+
+    expect(config.tracker.statuses).toHaveLength(1);
+    expect(problems.find((problem) => problem.source === 'action "pick"')).toMatchObject({ skipped: false });
+  });
+
+  it("refuses the project root itself as the tracker folder", () => {
+    const { problems } = mergeConfig([{ source: "repo", value: { version: 1, tracker: { folder: "./" } } }]);
+
+    expect(problems[0].message).toMatch(/inside the project/);
   });
 });
 
