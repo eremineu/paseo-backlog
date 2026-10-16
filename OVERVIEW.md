@@ -21,7 +21,7 @@ With no config, ready-for-agent issues get Pick (a worktree, status in-progress)
 
 ## Config
 
-A team can commit a `backlog` key to the repo's `paseo.json`, and each person can add their own layer in Settings → Plugins → Backlog. Both can change the tracker folder, the statuses and the actions, including the prompts, so everyone can point actions at their own skills. The README describes every field.
+A team can commit a `backlog` key to the repo's `paseo.json`, and each person can add their own layer in Settings → Plugins → Backlog, with forms to edit, add, hide or reset actions and change the tracker. Both can change the tracker folder, the statuses and the actions, including the prompts, so everyone can point actions at their own skills. The README describes every field.
 
 Settings → Plugins → Backlog also sets the default agent used by actions that don't name one. "Provider default" follows whatever the provider marks as its default.
 

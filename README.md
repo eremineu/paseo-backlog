@@ -14,7 +14,7 @@ paseo plugin update paseo-backlog   # later, for new versions
 Out of the box the plugin reads `.scratch/<effort>/issues/NN-*.md` and offers four plain-language actions. Anything can be changed in two layers on top of that, each later one winning:
 
 1. **The repo:** a `backlog` key in `paseo.json` at the project root, committed and shared by everyone working on it.
-2. **You:** Settings → Plugins → Backlog → "Your backlog config", for your daemon only.
+2. **You:** Settings → Plugins → Backlog, for your daemon only. Forms list every action with where it comes from (built-in, team or yours) and let you edit, add, hide or reset them, and change the tracker. A project picker shows your changes on top of that repo's `paseo.json`. "Edit as JSON" under Advanced holds the same layer as text, for sharing or fixing.
 
 Both take the same shape:
 
@@ -105,7 +105,9 @@ paseo plugin logs paseo-backlog
 | `server/links.ts` | daemon | Card-to-agent links in `~/.local/state/paseo-backlog/links.json` |
 | `client/board.tsx` | app | The board: sections, cards, running actions |
 | `client/board-panel.tsx`, `client/board-screen.tsx` | app | The workspace tab, and the sidebar screen with a project picker |
-| `client/personal-config-section.tsx`, `client/settings-screen.tsx` | app | Settings: default agent and the personal config editor |
+| `shared/layers.ts` | both | Which layer each action comes from, and edits to the personal layer |
+| `client/settings-screen.tsx`, `client/config-settings.tsx` | app | Settings: default agent, project preview, and the forms below |
+| `client/actions-settings.tsx`, `client/action-editor.tsx`, `client/tracker-settings.tsx`, `client/advanced-config-section.tsx` | app | The action list and editor, the tracker form, and the raw JSON editor |
 | `client/start-work.ts` | app | Creates the worktree or opens the project folder, then starts the agent |
 
 Live updates are a long poll: `backlog.wait` resolves as soon as the tracker, `paseo.json` or the personal config changes, or after 20 s, under Paseo's 30 s RPC timeout. Linked agents' states refresh every 3 s.
