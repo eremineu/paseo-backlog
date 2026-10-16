@@ -80,8 +80,10 @@ export const setStatus = async (
   effort: string,
   file: string,
   status: string,
+  restore = false,
 ) => {
-  if (!config.tracker.statuses.some((entry) => entry.name === status)) {
+  // Restoring puts back whatever the file said before, even a word the config doesn't list.
+  if (!restore && !config.tracker.statuses.some((entry) => entry.name === status)) {
     throw new Error(`Unknown status: ${status}`);
   }
   const path = issuePathOf(projectRoot, config.tracker.folder, effort, file);
@@ -129,16 +131,21 @@ export const createChangeFeed = () => {
     };
     watches.set(projectRoot, entry);
 
-    if (!entry.configWatcher) {
-      entry.configWatcher = watch(projectRoot, (_, filename) => {
-        if (filename === "paseo.json") {
-          bump(entry);
-        }
-      });
-      entry.configWatcher.on("error", () => {
-        entry.configWatcher?.close();
+    // A missing or unwatchable root just means no live config updates; the long poll still times out normally.
+    if (!entry.configWatcher && existsSync(projectRoot)) {
+      try {
+        entry.configWatcher = watch(projectRoot, (_, filename) => {
+          if (filename === "paseo.json") {
+            bump(entry);
+          }
+        });
+        entry.configWatcher.on("error", () => {
+          entry.configWatcher?.close();
+          entry.configWatcher = null;
+        });
+      } catch {
         entry.configWatcher = null;
-      });
+      }
     }
 
     if (entry.folder !== folder) {
@@ -147,7 +154,11 @@ export const createChangeFeed = () => {
     }
     const tracker = trackerDir(projectRoot, folder);
     if (!entry.trackerWatcher && existsSync(tracker)) {
-      entry.trackerWatcher = watch(tracker, { recursive: true }, () => bump(entry));
+      try {
+        entry.trackerWatcher = watch(tracker, { recursive: true }, () => bump(entry));
+      } catch {
+        return entry;
+      }
       entry.trackerWatcher.on("error", () => {
         dropTrackerWatch(entry);
         bump(entry);

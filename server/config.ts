@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type ConfigProblem, mergeConfig } from "../shared/config";
@@ -7,16 +6,33 @@ const personalSource = "Settings → Plugins → Backlog";
 
 type LayerRead = { layer: { source: string; value: unknown } | null; problem: ConfigProblem | null };
 
+const problemOf = (source: string, error: unknown): LayerRead => ({
+  layer: null,
+  problem: { source, message: error instanceof Error ? error.message : String(error), skipped: true },
+});
+
 const parseLayer = (source: string, text: string, pick: (value: unknown) => unknown = (value) => value): LayerRead => {
   try {
     return { layer: { source, value: pick(JSON.parse(text)) }, problem: null };
   } catch (error) {
-    return { layer: null, problem: { source, message: error instanceof Error ? error.message : String(error) } };
+    return problemOf(source, error);
   }
 };
 
 const backlogKey = (value: unknown) =>
   value !== null && typeof value === "object" ? Reflect.get(value, "backlog") : undefined;
+
+// A missing file is no layer; any other read failure is reported like a broken one.
+const readRepoLayer = async (projectRoot: string): Promise<LayerRead> => {
+  const path = join(projectRoot, "paseo.json");
+  const source = `${path} → backlog`;
+  try {
+    return parseLayer(source, await readFile(path, "utf8"), backlogKey);
+  } catch (error) {
+    const missing = error instanceof Error && "code" in error && error.code === "ENOENT";
+    return missing ? { layer: null, problem: null } : problemOf(source, error);
+  }
+};
 
 const personalLayer = (json: string): LayerRead =>
   json.trim() === "" ? { layer: null, problem: null } : parseLayer(personalSource, json);
@@ -28,13 +44,8 @@ const merge = (reads: readonly LayerRead[]) => {
 };
 
 // Built-in defaults, then the repo's `paseo.json` → `backlog`, then the person's own settings.
-export const loadConfig = async (projectRoot: string, personalJson: string) => {
-  const repoPath = join(projectRoot, "paseo.json");
-  const repo = existsSync(repoPath)
-    ? parseLayer(`${repoPath} → backlog`, await readFile(repoPath, "utf8"), backlogKey)
-    : { layer: null, problem: null };
-  return merge([repo, personalLayer(personalJson)]);
-};
+export const loadConfig = async (projectRoot: string, personalJson: string) =>
+  merge([await readRepoLayer(projectRoot), personalLayer(personalJson)]);
 
 // A personal draft on its own, for the settings editor: no project is in view there.
 export const checkPersonalConfig = (json: string) => merge([personalLayer(json)]);

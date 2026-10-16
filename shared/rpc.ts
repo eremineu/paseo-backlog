@@ -9,7 +9,7 @@ const issueInput = effortInput.extend({ file: z.string() });
 export const listEfforts = defineRpc({
   name: "backlog.efforts",
   input: z.object({ projectRoot: z.string() }),
-  output: z.object({ efforts: z.array(z.string()), problems: z.array(configProblemSchema) }),
+  output: z.object({ efforts: z.array(z.string()), folder: z.string(), problems: z.array(configProblemSchema) }),
 });
 
 export const readBoard = defineRpc({
@@ -34,7 +34,8 @@ export const waitForChange = defineRpc({
 
 export const setStatus = defineRpc({
   name: "backlog.set-status",
-  input: issueInput.extend({ status: z.string() }),
+  // `restore` writes back the status a failed start replaced, which may be one the config doesn't list.
+  input: issueInput.extend({ status: z.string(), restore: z.boolean().optional() }),
   output: z.object({ status: z.string() }),
 });
 

@@ -40,7 +40,7 @@ export const PersonalConfigSection = ({ theme, compact }: { theme: PluginTheme; 
   const save = async () => {
     const checked = await check({ json: text });
     setResult(checked);
-    if (checked.problems.length > 0) {
+    if (checked.problems.some((problem) => problem.skipped)) {
       toast.error("Not saved: fix the problems listed under the editor.");
       return;
     }

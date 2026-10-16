@@ -33,7 +33,8 @@ export default function contribute(server: PluginServerContext) {
 
   server.handle(listEfforts, async ({ projectRoot }) => {
     const { config, problems } = await configFor(projectRoot);
-    return { efforts: await tracker.listEfforts(projectRoot, config.tracker.folder), problems };
+    const { folder } = config.tracker;
+    return { efforts: await tracker.listEfforts(projectRoot, folder), folder, problems };
   });
   server.handle(readBoard, async ({ projectRoot, effort }) => {
     const { config, problems } = await configFor(projectRoot);
@@ -43,9 +44,9 @@ export default function contribute(server: PluginServerContext) {
     const { config } = await configFor(projectRoot);
     return feed.waitForChange(projectRoot, config.tracker.folder, version);
   });
-  server.handle(setStatus, async ({ projectRoot, effort, file, status }) => {
+  server.handle(setStatus, async ({ projectRoot, effort, file, status, restore }) => {
     const { config } = await configFor(projectRoot);
-    return tracker.setStatus(projectRoot, config, effort, file, status);
+    return tracker.setStatus(projectRoot, config, effort, file, status, restore);
   });
   server.handle(readIssue, async ({ projectRoot, effort, file }) => {
     const { config } = await configFor(projectRoot);

@@ -166,8 +166,11 @@ export const BacklogBoard = ({
         await writeStatus({ projectRoot, effort, file: card.file, status: startStatus });
       }
       const link = await start().catch(async (error: unknown) => {
+        // The start error is the one worth showing; a failed revert only adds a second toast.
         if (startStatus) {
-          await writeStatus({ projectRoot, effort, file: card.file, status: card.status });
+          await writeStatus({ projectRoot, effort, file: card.file, status: card.status, restore: true }).catch(() =>
+            toast.error(`Could not put the status back to ${card.status}.`),
+          );
         }
         throw error;
       });
@@ -198,7 +201,7 @@ export const BacklogBoard = ({
     problems.length === 0 ? null : (
       <View style={[styles.card, { borderColor: theme.colors.statusWarning }]}>
         <Text style={[styles.text, { color: theme.colors.statusWarning }]}>
-          Some backlog config was skipped and the rest still applies:
+          Backlog config problems (a broken layer is skipped, the rest still applies):
         </Text>
         {problems.map((problem) => (
           <Text key={`${problem.source}:${problem.message}`} selectable style={styles.muted}>
@@ -213,7 +216,7 @@ export const BacklogBoard = ({
       return <Text style={styles.muted}>Loading…</Text>;
     }
     if (effortNames.length === 0) {
-      const folder = config?.tracker.folder ?? ".scratch";
+      const folder = efforts.data?.folder ?? ".scratch";
       return (
         <Text style={styles.muted}>
           No tracker in {projectRoot}. Efforts live in {folder}/&lt;effort&gt;/issues/.
