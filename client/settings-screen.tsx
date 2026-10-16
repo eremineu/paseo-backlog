@@ -1,13 +1,14 @@
 import { type PluginSurfaceProps, useSettings } from "@getpaseo/plugin/client";
 import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect } from "@getpaseo/plugin/client/ui";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import { resolveAgentChoice } from "../shared/agent-choice";
 import { agentDefaults } from "../shared/settings";
+import { PersonalConfigSection } from "./personal-config-section";
 import { useProviderCatalog } from "./use-agent-choice";
 
 const providerDefault = "";
 
-export const SettingsScreen = ({ theme }: PluginSurfaceProps) => {
+const AgentDefaultsSection = ({ theme }: Pick<PluginSurfaceProps, "theme">) => {
   const settings = useSettings(agentDefaults);
   const catalog = useProviderCatalog();
 
@@ -21,7 +22,7 @@ export const SettingsScreen = ({ theme }: PluginSurfaceProps) => {
   const save = (patch: Partial<typeof values>) => void settings.save({ ...values, ...patch }, settings.revision);
 
   return (
-    <SettingsSection title="Agent for Pick and Help me">
+    <SettingsSection title="Default agent for actions">
       <SettingsCard>
         <SettingsSelect
           label="Provider"
@@ -55,3 +56,10 @@ export const SettingsScreen = ({ theme }: PluginSurfaceProps) => {
     </SettingsSection>
   );
 };
+
+export const SettingsScreen = ({ theme, layout }: PluginSurfaceProps) => (
+  <View style={{ gap: 24 }}>
+    <AgentDefaultsSection theme={theme} />
+    <PersonalConfigSection theme={theme} compact={layout.compact} />
+  </View>
+);

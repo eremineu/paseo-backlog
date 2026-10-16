@@ -30,6 +30,6 @@ export default function contribute(client: PluginClientContext) {
     context: "global",
     onSelect: ({ openScreen }) => openScreen({ screenId: boardScreenId }),
   });
-  client.addSettingsScreen({ id: "agent", title: "Backlog agent", icon: "Bot", Component: SettingsScreen });
+  client.addSettingsScreen({ id: "agent", title: "Backlog", icon: "KanbanSquare", Component: SettingsScreen });
   return () => {};
 }
